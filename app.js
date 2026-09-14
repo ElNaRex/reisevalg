@@ -19,6 +19,7 @@ const app = $("#app");
 const state = { profile: null, config: null, verdicts: [], latest: null, pushSupported: "serviceWorker" in navigator && "PushManager" in window, step: 0 };
 
 const HELP = {
+  dekning: ["Hvilke strekninger", "Vi trenger målt kjøretid fra Statens vegvesen for hele veien bilen kjører. I dag finnes det for E18 fra Sandvika og Høvik inn til Oslo. Vest for Holmen (Slependen, Asker, Lier, Brakerøya) publiserer Vegvesenet ikke tall ennå. Andre steder, som E6 fra Follo og Romerike, har tall, og kan bli neste. Ønsk deg en strekning, så prioriterer vi etter etterspørsel."],
   installer: ["Slik får du varsler", "<b>iPhone:</b> åpne lenken i Safari, trykk Del-knappen (firkanten med pil opp), velg «Legg til på Hjem-skjerm», og åpne appen derfra. Bare da kan iPhone vise varsler fra en nettapp.<br><br><b>Android:</b> trykk menyen (⋮) i Chrome og «Legg til på startskjermen» eller «Installer app». Varsler virker også uten, men er sikrest med appen installert.<br><br>Til slutt trykker du «Lagre og slå på varsler» og godtar spørsmålet fra telefonen."],
   togreise: ["Togreisen", "Vi trenger to tider fra deg: hjemmefra til du står klar på perrongen (med kjøring, sykkel, parkering og gange), og fra stasjonen du kommer til og helt frem til jobb. Ventetid og selve togturen regner vi ut fra rutetabell og sanntid."],
   toStationMin: ["Hjem til perrongen", "Fra du går hjemmefra til du står klar til å gå om bord. Ta med eventuell kjøring eller sykling, parkering og gange. Ikke ta med venting på toget."],
@@ -107,6 +108,9 @@ function renderOnboarding() {
       <h1>Får du beskjed når toget slår bilen?</h1>
       <p>Hver hverdag kl. 06:30 og 07:00 regner vi bil mot tog for din reise. Du får varsel bare når toget vinner. ${Q("tilstand")}</p>
       ${installHint}
+      <p class="small"><b>Gjelder nå:</b> Sandvika og Høvik → Oslo S, sentrum vest og Skøyen. Andre stasjoner ser regnestykket, men får ikke varsel ennå. ${Q("dekning")}</p>
+      <div class="minute-input" id="wish-row" hidden><input id="wish-text" type="text" maxlength="200" placeholder="F.eks. Ski → Oslo S" enterkeyhint="send" style="max-width:none;flex:1"><button type="button" class="btn btn-secondary" id="wish-send" style="width:auto">Send</button></div>
+      <button type="button" class="btn btn-ghost" id="wish-toggle" style="padding-left:0">Ikke din strekning? Ønsk deg en →</button>
       <button type="button" class="btn" data-next>Kom i gang</button>
       <p class="small muted">Testversjon for kolleger i Entur. Ingen adresse lagres. ${Q("test")}</p>`,
     () => `
@@ -140,6 +144,9 @@ function renderOnboarding() {
   ];
   app.innerHTML = `<p class="small muted">${state.step ? `Steg ${state.step} av 3` : ""}</p><div class="steps" aria-hidden="true">${steps.map((_, i) => `<i class="${i <= state.step ? "on" : ""}"></i>`).join("")}</div><form class="card lift" id="stepcard">${steps[state.step]()}</form>`;
   const remember = () => store.set("onboardingDraft", d);
+  $("#wish-toggle")?.addEventListener("click", () => { $("#wish-row").hidden = false; $("#wish-toggle").hidden = true; $("#wish-text").focus(); });
+  $("#wish-send")?.addEventListener("click", async () => { const t = $("#wish-text").value.trim(); if (t.length < 3) return toast("Skriv hvor du reiser fra og til."); try { await api("/wishes", { method: "POST", body: { deviceId, text: t } }); $("#wish-row").hidden = true; toast("Takk! Ønsket er lagret."); } catch (e) { toast("Fikk ikke lagret ønsket. Prøv igjen."); } });
+  $("#wish-text")?.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); $("#wish-send").click(); } });
   $("#stepcard").addEventListener("submit", e => { e.preventDefault(); $("[data-next]")?.click(); });
   app.querySelectorAll("[data-next]").forEach(b => b.addEventListener("click", () => { if (!$("#stepcard").reportValidity()) return; remember(); state.step = Math.min(steps.length - 1, state.step + 1); renderOnboarding(); $("h2")?.setAttribute("tabindex", "-1"); $("h2")?.focus(); }));
   app.querySelectorAll("[data-back]").forEach(b => b.addEventListener("click", () => { remember(); state.step = Math.max(0, state.step - 1); renderOnboarding(); }));
