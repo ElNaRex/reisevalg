@@ -10,7 +10,7 @@ async function discoverApi() {
   if (CFG.apiDiscoveryUrl) { try { const r = await fetch(CFG.apiDiscoveryUrl + (CFG.apiDiscoveryUrl.includes("?") ? "&" : "?") + "t=" + Date.now(), { cache: "no-store", signal: AbortSignal.timeout(8000) }); const j = await r.json(); if (j.apiBase && /^https:\/\//.test(j.apiBase)) candidates.unshift(j.apiBase.replace(/\/$/, "")); } catch {} }
   for (const base of candidates) {
     if (base === API) continue;
-    try { const r = await fetch(base + "/config", { headers: { "Bypass-Tunnel-Reminder": "true" }, signal: AbortSignal.timeout(8000) }); if (r.ok) { API = base; try { localStorage.setItem("apiBase", base); } catch {} return true; } } catch {}
+    try { const r = await fetch(base + "/config", { headers: { "Bypass-Tunnel-Reminder": "true" }, signal: AbortSignal.timeout(8000) }); if (r.ok) { API = base; try { localStorage.setItem("apiBase", base); } catch {} if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js?api=" + encodeURIComponent(new URL(API, location.href).href), { updateViaCache: "none" }).catch(() => {}); return true; } } catch {}
   }
   return false;
 }
@@ -19,6 +19,13 @@ const app = $("#app");
 const state = { profile: null, config: null, verdicts: [], latest: null, pushSupported: "serviceWorker" in navigator && "PushManager" in window, step: 0 };
 
 const HELP = {
+  installer: ["Slik får du varsler", "<b>iPhone:</b> åpne lenken i Safari, trykk Del-knappen (firkanten med pil opp), velg «Legg til på Hjem-skjerm», og åpne appen derfra. Bare da kan iPhone vise varsler fra en nettapp.<br><br><b>Android:</b> trykk menyen (⋮) i Chrome og «Legg til på startskjermen» eller «Installer app». Varsler virker også uten, men er sikrest med appen installert.<br><br>Til slutt trykker du «Lagre og slå på varsler» og godtar spørsmålet fra telefonen."],
+  togreise: ["Togreisen", "Vi trenger to tider fra deg: hjemmefra til du står klar på perrongen (med kjøring, sykkel, parkering og gange), og fra stasjonen du kommer til og helt frem til jobb. Ventetid og selve togturen regner vi ut fra rutetabell og sanntid."],
+  toStationMin: ["Hjem til perrongen", "Fra du går hjemmefra til du står klar til å gå om bord. Ta med eventuell kjøring eller sykling, parkering og gange. Ikke ta med venting på toget."],
+  walkFromStationMin: ["Fra stasjonen til jobb", "Fra du går av toget til du er fremme på jobb, inkludert veien ut av stasjonen."],
+  bilreise: ["Bilen", "Vi sammenligner med bil på samme strekning, hjemmefra og helt til jobb. Du trenger ikke kjøre bil til vanlig. Kjøretiden uten kø oppgir du selv; køen henter vi fra Statens vegvesen hver morgen."],
+  carFreeFlowMin: ["Kjøretid uten kø", "Bare kjøringen, hjemmefra til der du ville parkert ved jobb, en dag helt uten kø. Parkering og gange kommer i neste felt."],
+  parkingWalkMin: ["Parkering og gange", "Tiden fra du stopper bilen til du sitter på jobb: finne plass, parkere, gå. Skriv 0 hvis det ikke tar tid."],
   bil: ["Bil i dag", "Kjøretiden uten kø du oppga + modellert køtillegg + parkering og gange til jobb. Dine egne tider er anslag. DATEX beskriver veistrekninger, ikke en observert personlig biltur."],
   tog: ["Tog i dag", "Tiden du bruker til stasjonen, ventetid til neste tog etter at du rekker fram, togets kjøretid med sanntid fra Entur, og gangen fra stasjonen til jobb."],
   sparer: ["Du sparer", "Bil i dag minus tog i dag. Vi sier bare at toget vinner når differansen er minst 10 minutter og togene i ditt tidsvindu ikke har varsler i Avviksvarsel. Hvis køen er i ferd med å løse seg opp krever vi 15."],
@@ -90,49 +97,48 @@ function renderOnboarding() {
     parkingWalkMin: { value: 8, why: "typisk parkering og gange i sentrum" },
   };
   const suggest = (key) => { const s = suggestions[key]; return s && !Number.isFinite(d[key]) && !d.unknownFields?.includes(key) ? `<div class="chips" style="margin-top:.35rem"><button type="button" class="chip" data-suggest="${key}" data-v="${s.value}">Bruk forslag: ${s.value} min</button><span class="hint">${s.why}. Juster hvis du vet bedre.</span></div>` : ""; };
-  const minutes = (key, hint) => `<div class="field"><label for="f-${key}">${MINUTE_FIELDS[key].label}</label><div class="minute-input"><input id="f-${key}" data-minutes="${key}" type="number" inputmode="numeric" min="0" max="${MINUTE_FIELDS[key].max}" step="1" ${d.unknownFields?.includes(key) ? "disabled" : "required"} value="${Number.isFinite(d[key]) ? d[key] : ""}" aria-describedby="hint-${key}"><span aria-hidden="true">min</span></div><span class="hint" id="hint-${key}">${hint}</span>${suggest(key)}<label class="confirm-times hint"><input type="checkbox" data-unknown="${key}" ${d.unknownFields?.includes(key) ? "checked" : ""}>Vet ikke ennå</label></div>`;
+  const minutes = (key, hint) => `<div class="field"><label for="f-${key}">${MINUTE_FIELDS[key].label} ${Q(key)}</label><div class="minute-input"><input id="f-${key}" data-minutes="${key}" type="number" inputmode="numeric" enterkeyhint="done" min="0" max="${MINUTE_FIELDS[key].max}" step="1" ${d.unknownFields?.includes(key) ? "disabled" : "required"} value="${Number.isFinite(d[key]) ? d[key] : ""}" aria-describedby="hint-${key}"><span aria-hidden="true">min</span><button type="button" class="chip done" data-done>Ferdig</button></div><span class="hint" id="hint-${key}">${hint}</span>${suggest(key)}<label class="confirm-times hint"><input type="checkbox" data-unknown="${key}" ${d.unknownFields?.includes(key) ? "checked" : ""}>Vet ikke ennå</label></div>`;
   const sum = carBaseline(d);
+  const installHint = isStandalone ? "" : isIOS
+    ? `<div class="ios-hint"><b>Først: legg appen på Hjem-skjermen.</b> Del-knappen → «Legg til på Hjem-skjerm» → åpne den derfra. Ellers kan iPhone ikke vise varsler. ${Q("installer")}</div>`
+    : `<p class="small muted">Tips: installer appen fra nettlesermenyen for sikre varsler. ${Q("installer")}</p>`;
   const steps = [
     () => `
-      <h1>Bil eller tog fra hjem til jobb?</h1>
-      <p>Sammenlign de to alternativene, uansett hvordan du reiser til vanlig. Du oppgir tidene som er særegne for reisen din; vi henter tilgjengelige tog- og veidata.</p>
-      <div class="card"><p><b>Samme start og mål:</b> hjemmefra til du er fremme på jobb. Kjøring, parkering og gange skal være med.</p><p class="small muted">Tidene du oppgir er anslag. Ingen adresse eller vanlig reisemåte registreres.</p></div>
-      <p class="small muted">Testversjon for kolleger. Du får varsel bare de morgenene toget vinner. Slår bilen toget, er det stille. Åpner du appen, ser du regnestykket uansett.</p>
-      ${!available ? `<p role="alert">Får ikke hentet stasjoner og arbeidsområder. Prøv igjen når tjenesten er tilgjengelig.</p>` : ""}
-      <button type="button" class="btn" data-next ${!available ? "disabled" : ""}>Kom i gang</button>`,
+      <h1>Får du beskjed når toget slår bilen?</h1>
+      <p>Hver hverdag kl. 06:30 og 07:00 regner vi bil mot tog for din reise. Du får varsel bare når toget vinner. ${Q("tilstand")}</p>
+      ${installHint}
+      <button type="button" class="btn" data-next>Kom i gang</button>
+      <p class="small muted">Testversjon for kolleger i Entur. Ingen adresse lagres. ${Q("test")}</p>`,
     () => `
-      <h2>Togreisen fra dør til dør</h2>
-      <p>Oppgi tidene uten selve togturen og ventetiden på toget. Disse beregner vi fra avgangen.</p>
-      <label class="field" for="f-station">Stasjonen du ville reist fra
+      <h2>Togreisen ${Q("togreise")}</h2>
+      <label class="field" for="f-station">Stasjonen du reiser fra
         <select id="f-station" required><option value="">Velg stasjon</option>${Object.entries(stations).map(([id, station]) => `<option value="${id}" ${id === d.station ? "selected" : ""}>${station.name}</option>`).join("")}</select>
       </label>
-      <p id="station-coverage-note" class="hint" ${st.dark ? "" : "hidden"}>Veimålinger mangler på deler av denne korridoren. Vi viser «vet ikke» når grunnlaget ikke holder.</p>
-      ${minutes("toStationMin", "Fra du går hjemmefra til du er klar til å gå om bord. Ta med eventuell kjøring, sykkelparkering eller bilparkering og gange til perrongen. Ikke ta med venting på toget.")}
-      <label class="field" for="f-work">Arbeidsområdet ditt
-        <select id="f-work" required><option value="">Velg arbeidsområde</option>${Object.entries(areas).map(([id, area]) => `<option value="${id}" ${id === d.workArea ? "selected" : ""}>${area.label}</option>`).join("")}</select>
+      <p id="station-coverage-note" class="hint" ${st.dark ? "" : "hidden"}>Vegvesenet mangler måling på deler av denne veien. Da svarer vi «vet ikke».</p>
+      ${minutes("toStationMin", "Uten venting på toget.")}
+      <label class="field" for="f-work">Der du jobber
+        <select id="f-work" required><option value="">Velg område</option>${Object.entries(areas).map(([id, area]) => `<option value="${id}" ${id === d.workArea ? "selected" : ""}>${area.label}</option>`).join("")}</select>
       </label>
-      ${minutes("walkFromStationMin", "Fra du går av toget ved arbeidsområdet, til du er fremme på jobb. Ta med tiden ut av stasjonen og hele veien til arbeidsplassen.")}
+      ${minutes("walkFromStationMin", "Fra toget og helt frem.")}
       <div class="row"><button type="button" class="btn btn-secondary" data-back>Tilbake</button><button type="button" class="btn" data-next>Neste</button></div>`,
     () => `
-      <h2>Bilalternativet fra dør til dør</h2>
-      <p>Hvor lang tid ville reisen tatt med bil uten kø? Du trenger ikke å bruke bil til vanlig.</p>
-      ${minutes("carFreeFlowMin", "Bare kjøringen fra hjemmet til parkeringsstedet ved jobb, på en dag uten kø. Parkering og gange oppgir du under.")}
-      ${minutes("parkingWalkMin", "Fra du avslutter kjøringen: tiden til å parkere og gå helt frem til jobb. Oppgi 0 hvis det ikke tar ekstra tid.")}
-      <div class="total-box" aria-live="polite" aria-atomic="true"><b>Bil totalt uten kø</b><output id="car-total">${sum == null ? "Fyll ut begge tidene" : `${d.carFreeFlowMin == null ? "ukjent tid" : d.carFreeFlowMin + " min"} kjøring + ${d.parkingWalkMin == null ? "ukjent tid" : d.parkingWalkMin + " min"} parkering/gange = ${sum} min totalt`}</output><span class="hint">Kø legges til dette totalanslaget når veidata og bilruten kan brukes. Ingen skjulte ekstraminutter.</span></div>
-      <p class="small muted">Usikker? Velg «Vet ikke ennå». Du kan lagre reisen, men vi gir ingen sammenligning før nødvendige tider er fylt ut. Tall du oppgir registreres som anslag, ikke som målt reisetid.</p>
+      <h2>Bilen ${Q("bilreise")}</h2>
+      <p class="small muted">Samme reise med bil, en dag uten kø. Du trenger ikke kjøre bil til vanlig.</p>
+      ${minutes("carFreeFlowMin", "Hjemmefra til der du parkerer.")}
+      ${minutes("parkingWalkMin", "Skriv 0 hvis det ikke tar tid.")}
+      <div class="total-box" aria-live="polite" aria-atomic="true"><b>Bil uten kø</b><output id="car-total">${sum == null ? "Fyll ut begge" : `${d.carFreeFlowMin ?? "?"} + ${d.parkingWalkMin ?? "?"} = ${sum} min`}</output><span class="hint">Køen på E18 legges til hver morgen.</span></div>
       <div class="row"><button type="button" class="btn btn-secondary" data-back>Tilbake</button><button type="button" class="btn" data-next>Neste</button></div>`,
     () => `
-      <h2>Kontroller reisen din</h2>
-      ${d.profileSchemaVersion !== 2 && d.deviceId ? `<p class="ios-hint">Disse tidene kommer fra det gamle oppsettet og kan inneholde standardverdier. Kontroller at kjøring, parkering og gange har riktig betydning før du lagrer.</p>` : ""}
-      <div class="card"><p><b>${st.name || ""}</b> → ${areas[d.workArea]?.label || ""}</p><p><b>Bil uten kø: ${sum == null ? "mangler tider" : sum + " min totalt"}</b><br>${d.carFreeFlowMin == null ? "ukjent tid" : d.carFreeFlowMin + " min"} kjøring + ${d.parkingWalkMin == null ? "ukjent tid" : d.parkingWalkMin + " min"} parkering og gange.</p><p><b>Tog:</b> ${d.toStationMin == null ? "ukjent tid" : d.toStationMin + " min"} til perrongen + venting + togturen + ${d.walkFromStationMin == null ? "ukjent tid" : d.walkFromStationMin + " min"} fra ankomststasjonen til jobb.</p><p class="small muted">Begge alternativer måles fra du går hjemmefra til du er fremme på jobb. Tidene over er dine anslag.</p></div>
-      <label class="confirm-times"><input id="confirm-times" type="checkbox" required><span>Jeg har kontrollert tidene. Parkering og gange er med én gang i hvert alternativ. Det jeg ikke vet, er markert som ukjent.</span></label>
-      <p>Varselet kommer 06:30 og 07:00 på hverdager, bare når toget vinner. Slår bilen toget, sender vi ingenting. Du kan også lagre uten varsler.</p>
-      ${isIOS && !isStandalone ? `<div class="ios-hint"><b>iPhone:</b> legg appen til på Hjem-skjermen via Del, og åpne den derfra for å aktivere varsler. Du kan lagre reisen uten varsler nå.</div>` : ""}
-      ${!state.pushSupported ? `<div class="ios-hint">Denne nettleseren støtter ikke push. Du kan lagre og bruke «Sjekk nå».</div>` : ""}
+      <h2>Stemmer dette?</h2>
+      ${d.profileSchemaVersion !== 2 && d.deviceId ? `<p class="ios-hint">Tidene kommer fra det gamle oppsettet. Sjekk at de stemmer før du lagrer.</p>` : ""}
+      <div class="card"><p><b>${st.name || ""}</b> → ${areas[d.workArea]?.label || ""}</p><p><b>Bil uten kø:</b> ${sum == null ? "mangler tider" : sum + " min"} (${d.carFreeFlowMin ?? "?"} kjøring + ${d.parkingWalkMin ?? "?"} parkering og gange)</p><p><b>Tog:</b> ${d.toStationMin ?? "?"} min til perrongen + venting + toget + ${d.walkFromStationMin ?? "?"} min til jobb</p></div>
+      <p>Varsel 06:30 og 07:00 på hverdager, bare når toget vinner. ${Q("tilstand")}</p>
+      ${isIOS && !isStandalone ? `<div class="ios-hint"><b>iPhone:</b> varsler krever at appen ligger på Hjem-skjermen. ${Q("installer")} Du kan lagre nå og slå på varsler etterpå.</div>` : ""}
+      ${!state.pushSupported ? `<div class="ios-hint">Denne nettleseren støtter ikke varsler. Du kan lagre og bruke «Sjekk nå».</div>` : ""}
       <div class="row"><button type="button" class="btn btn-secondary" data-back>Tilbake</button><button type="button" class="btn" id="btn-enable" ${!state.pushSupported || (isIOS && !isStandalone) ? "disabled" : ""}>Lagre og slå på varsler</button></div>
       <button type="button" class="btn btn-ghost" id="btn-skip">Lagre uten varsler</button>`,
   ];
-  app.innerHTML = `<p class="small muted">${state.step ? `Steg ${state.step} av 3` : "Tilpass sammenligningen"}</p><div class="steps" aria-hidden="true">${steps.map((_, i) => `<i class="${i <= state.step ? "on" : ""}"></i>`).join("")}</div><form class="card lift" id="stepcard">${steps[state.step]()}</form>`;
+  app.innerHTML = `<p class="small muted">${state.step ? `Steg ${state.step} av 3` : ""}</p><div class="steps" aria-hidden="true">${steps.map((_, i) => `<i class="${i <= state.step ? "on" : ""}"></i>`).join("")}</div><form class="card lift" id="stepcard">${steps[state.step]()}</form>`;
   const remember = () => store.set("onboardingDraft", d);
   $("#stepcard").addEventListener("submit", e => { e.preventDefault(); $("[data-next]")?.click(); });
   app.querySelectorAll("[data-next]").forEach(b => b.addEventListener("click", () => { if (!$("#stepcard").reportValidity()) return; remember(); state.step = Math.min(steps.length - 1, state.step + 1); renderOnboarding(); $("h2")?.setAttribute("tabindex", "-1"); $("h2")?.focus(); }));
@@ -144,14 +150,16 @@ function renderOnboarding() {
       const unknown = $(`[data-unknown="${key}"]`); if (unknown) unknown.checked = false;
     }
   };
-  $("#f-station")?.addEventListener("change", e => { if(d.station !== e.target.value) resetTimes(["toStationMin"]); d.station = e.target.value; $("#station-coverage-note").hidden = !stations[d.station]?.dark; remember(); });
-  $("#f-work")?.addEventListener("change", e => { if(d.workArea !== e.target.value) resetTimes(["walkFromStationMin","carFreeFlowMin","parkingWalkMin"]); d.workArea = e.target.value; remember(); });
+  // Re-render after a choice so the suggestions («Bruk forslag») match the chosen station and area.
+  $("#f-station")?.addEventListener("change", e => { if(d.station !== e.target.value) resetTimes(["toStationMin"]); d.station = e.target.value; remember(); renderOnboarding(); });
+  $("#f-work")?.addEventListener("change", e => { if(d.workArea !== e.target.value) resetTimes(["walkFromStationMin","carFreeFlowMin","parkingWalkMin"]); d.workArea = e.target.value; remember(); renderOnboarding(); });
   app.querySelectorAll("[data-unknown]").forEach(box => box.addEventListener("change", () => {
     const key = box.dataset.unknown;
     d.unknownFields = (d.unknownFields || []).filter(k => k !== key);
     if (box.checked) { d.unknownFields.push(key); d[key] = null; }
     remember(); renderOnboarding();
   }));
+  app.querySelectorAll("[data-done]").forEach(b => b.addEventListener("click", () => { document.activeElement?.blur(); b.blur(); }));
   app.querySelectorAll("[data-suggest]").forEach(b => b.addEventListener("click", () => { const input = $(`#f-${b.dataset.suggest}`); if (!input) return; input.value = b.dataset.v; input.dispatchEvent(new Event("input", { bubbles: true })); b.closest(".chips")?.remove(); }));
   app.querySelectorAll("[data-minutes]").forEach(input => input.addEventListener("input", () => {
     d[input.dataset.minutes] = minuteValue(input.value); remember();
@@ -296,7 +304,8 @@ window.addEventListener("demo-verdict", (e) => { state.latest = e.detail; state.
     });
   }
   state.profile = store.get("profile");
-  try { state.config = await api("/config"); } catch (e) { state.config = { stations: {}, workAreas: {}, vapidPublicKey: CFG.vapidPublicKey }; toast("Får ikke kontakt med tjenesten. Prøv igjen om litt."); }
-  if (state.profile) await loadVerdicts();
-  render();
+  state.config = CFG.staticConfig ? { ...CFG.staticConfig, vapidPublicKey: CFG.vapidPublicKey } : { stations: {}, workAreas: {}, vapidPublicKey: CFG.vapidPublicKey };
+  render(); // never make the first screen wait for the network
+  api("/config").then((c) => { state.config = c; if (!state.profile && state.step === 0) render(); }).catch(() => { if (!Object.keys(state.config.stations).length) toast("Får ikke kontakt med tjenesten. Prøv igjen om litt."); });
+  if (state.profile) { await loadVerdicts(); render(); }
 })();

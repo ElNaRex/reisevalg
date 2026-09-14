@@ -1,10 +1,10 @@
 // Shared input semantics for onboarding and server validation. Minutes are user estimates,
 // never measured travel times. No car use or travel-mode preference is inferred.
 export const MINUTE_FIELDS = {
-  toStationMin: { max: 120, label: "Hjem til klar på perrongen" },
-  walkFromStationMin: { max: 120, label: "Fra ankomststasjonen til jobb" },
+  toStationMin: { max: 120, label: "Hjem til perrongen" },
+  walkFromStationMin: { max: 120, label: "Fra stasjonen til jobb" },
   carFreeFlowMin: { max: 240, label: "Kjøretid uten kø" },
-  parkingWalkMin: { max: 120, label: "Parkering og gange til jobb" },
+  parkingWalkMin: { max: 120, label: "Parkering og gange" },
 };
 
 export function minuteValue(raw) {

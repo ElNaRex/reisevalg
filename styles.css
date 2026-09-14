@@ -118,3 +118,7 @@ label.field .hint { font-weight: 400; color: var(--muted); font-size: .85rem; }
 .ios-hint { background: var(--warn-tint); color: var(--warn-ink); border-radius: 10px; padding: .7rem .8rem; font-size: .9rem; }
 .kbd { display: inline-block; border: 1px solid currentColor; border-radius: 4px; padding: 0 .3rem; font-size: .8rem; }
 @media (prefers-reduced-motion: no-preference) { .card { animation: rise .25s ease-out; } @keyframes rise { from { opacity: .6; transform: translateY(4px); } to { opacity: 1; transform: none; } } }
+
+.minute-input .done { display: none; padding: .35rem .7rem; font-size: .85rem; }
+.minute-input:focus-within .done { display: inline-block; }
+.field > label .q, h2 .q { vertical-align: middle; }
