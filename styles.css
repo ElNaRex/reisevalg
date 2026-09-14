@@ -46,6 +46,8 @@ main { max-width: 520px; margin: 0 auto; padding: .5rem 1rem 3rem; display: grid
 .verdict.TOG_VINNER { background: var(--win-tint); color: var(--win-ink); }
 .verdict.TOG_VINNER h1, .verdict.TOG_VINNER .num { color: var(--win-ink); }
 .verdict.INGEN_FORDEL { background: var(--neutral-tint); }
+.verdict.TOG_ALLTID { background: var(--win-tint); color: var(--win-ink); }
+.verdict.TOG_ALLTID h1, .verdict.TOG_ALLTID .num { color: var(--win-ink); }
 .verdict.TOG_USIKKERT { background: var(--warn-tint); color: var(--warn-ink); }
 .verdict.TOG_USIKKERT h1 { color: var(--warn-ink); }
 .verdict.VET_IKKE { background: var(--unknown-tint); color: var(--unknown-ink); }
@@ -103,7 +105,7 @@ label.field .hint { font-weight: 400; color: var(--muted); font-size: .85rem; }
 .history { display: grid; gap: .5rem; }
 .hist { display: grid; grid-template-columns: auto 1fr auto; gap: .6rem; align-items: center; padding: .55rem .7rem; border-radius: 10px; background: var(--soft); font-size: .9rem; }
 .dot { width: 10px; height: 10px; border-radius: 50%; }
-.dot.TOG_VINNER { background: #2e9e5b; } .dot.INGEN_FORDEL { background: #8a8fb8; } .dot.TOG_USIKKERT { background: #e0892f; } .dot.VET_IKKE { background: #c2c6dd; }
+.dot.TOG_VINNER { background: #2e9e5b; } .dot.INGEN_FORDEL { background: #8a8fb8; } .dot.TOG_ALLTID { background: #7cc9a0; } .dot.TOG_USIKKERT { background: #e0892f; } .dot.VET_IKKE { background: #c2c6dd; }
 
 .sources { font-size: .78rem; color: var(--muted); display: grid; gap: .2rem; }
 .sources b { color: var(--text); font-weight: 600; }

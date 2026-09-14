@@ -32,7 +32,7 @@ const HELP = {
   sparer: ["Du sparer", "Bil i dag minus tog i dag. Vi sier bare at toget vinner når differansen er minst 10 minutter og togene i ditt tidsvindu ikke har varsler i Avviksvarsel. Hvis køen er i ferd med å løse seg opp krever vi 15."],
   kø: ["Forsinkelse på E18", "Summen av målt reisetid minus fri flyt på strekningene Statens vegvesen dekker mot Oslo. Trenden sier om køen øker, er stabil eller avtar. Lier–Holmen mangler måling i dag, så for Lier og Brakerøya kan vi ikke svare før Vegvesenet skrur på strekningen."],
   togstatus: ["Togene i dag", "Avviksvarsel omfatter reisene tjenesten dekker. Tom varslingsliste er ingen garanti for normal trafikk. Journey Planner viser forventede tider, ikke dokumentasjon på faktisk ankomst."],
-  tilstand: ["Hva kortet kan si", "«I dag vinner toget» er det eneste varselet vi sender. Slår bilen toget, får du ingen melding. Åpner du appen, ser du likevel dagens regnestykke: «ingen togfordel», «togene er usikre» eller «vet ikke». Vi sier aldri «ta bilen»."],
+  tilstand: ["Hva kortet kan si", "«I dag vinner toget» er det eneste varselet vi sender, og bare når køen avgjør. Slår bilen toget, får du ingen melding. Åpner du appen, ser du likevel dagens regnestykke: «ingen togfordel», «toget er raskest uansett» (der toget alltid slår bilen, som fra Ski), «togene er usikre» eller «vet ikke». Vi sier aldri «ta bilen»."],
   test: ["Testperiode", "Du er med i en test med kolleger. Varsel kommer bare de morgenene toget vinner; de andre morgenene er det stille. Alt du svarer på kortet brukes til å måle om varselet treffer. Vi lagrer ingen adresse, bare stasjon, arbeidsområde og minuttene du oppgir."],
   fasit: ["Fasit", "Automatisk etterkontroll er suspendert. Togtidene er prognoser. Bilalternativet er et modellanslag fra DATEX og dine oppgitte tider, ikke en observert personlig biltur. Vi har ennå ikke verifisert om anbefalingene traff."],
   ferskhet: ["Kilder og ferskhet", "Veidata: Statens vegvesen DATEX II, oppdatert hvert femte minutt. Tog: Entur Avviksvarsel og Journey Planner med sanntid. Kortet lages klokka 06:30 og 07:00 og bruker målingene som var ferske da."],
@@ -225,7 +225,7 @@ function renderHome() {
   const v = state.latest;
   const st = v?.station || state.config?.stations?.[p.station] || {};
   const area = v?.work || state.config?.workAreas?.[p.workArea] || {};
-  const title = { TOG_VINNER: `I dag vinner toget fra ${st.name}`, INGEN_FORDEL: `Ingen togfordel i dag`, TOG_USIKKERT: `Kø på E18, men togene er usikre`, VET_IKKE: `Vet ikke i dag` };
+  const title = { TOG_VINNER: `I dag vinner toget fra ${st.name}`, TOG_ALLTID: `Toget er raskest fra ${st.name} uansett`, INGEN_FORDEL: `Ingen togfordel i dag`, TOG_USIKKERT: `Kø på veien, men togene er usikre`, VET_IKKE: `Vet ikke i dag` };
   app.innerHTML = `
     ${v ? `
     <section class="card verdict ${v.state}" aria-labelledby="vh">
