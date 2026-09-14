@@ -27,7 +27,7 @@ self.addEventListener("push", (e) => {
     badge: "./icons/badge-96.png",
     tag: data.tag || "reisevalg", // one card per slot per day; a newer one replaces it
     renotify: true,
-    data: { url: data.url || "./", verdictId: data.verdictId || null },
+    data: { url: data.url || "./", verdictId: data.verdictId || null, deviceId: data.deviceId || null },
     actions: data.state === "TOG_VINNER" ? [{ action: "trains", title: "Vis togavganger" }] : [],
   };
   e.waitUntil((async () => {
@@ -42,8 +42,11 @@ self.addEventListener("push", (e) => {
   })());
 });
 
+const apiBase = () => new URL(self.location.href).searchParams.get("api") || new URL("api", self.registration.scope).href;
+const swEvent = (kind, meta) => fetch(apiBase().replace(/\/$/, "") + "/events", { method: "POST", headers: { "Content-Type": "application/json", "Bypass-Tunnel-Reminder": "true" }, body: JSON.stringify({ deviceId: meta.deviceId || "sw-" + (self.registration.scope.length + 8), kind, meta }) }).catch(() => {});
 self.addEventListener("notificationclick", (e) => {
   e.notification.close();
+  e.waitUntil(swEvent("notification_click", { verdictId: e.notification.data?.verdictId || "", deviceId: e.notification.data?.deviceId || "" }));
   const target = new URL(e.notification.data?.url || "./", self.registration.scope).href;
   e.waitUntil(self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((list) => {
     const open = list.find((c) => c.url.startsWith(self.registration.scope));

@@ -47,6 +47,14 @@ const store = {
 };
 const deviceId = store.get("deviceId") || (() => { const id = uid(); store.set("deviceId", id); return id; })();
 const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.MSStream;
+// What we know about this device, without anything personal. Explains delivery problems and shows who is testing.
+function clientFacts() {
+  const ua = navigator.userAgent;
+  const platform = /iphone|ipad|ipod/i.test(ua) ? "ios" : /android/i.test(ua) ? "android" : /macintosh/i.test(ua) ? "mac" : /windows/i.test(ua) ? "windows" : "annet";
+  const browser = /CriOS|Chrome/.test(ua) ? "chrome" : /Safari/.test(ua) ? "safari" : /Firefox|FxiOS/.test(ua) ? "firefox" : "annet";
+  return { platform, standalone: String(window.matchMedia("(display-mode: standalone)").matches || navigator.standalone === true), permission: ("Notification" in window) ? Notification.permission : "n/a", lang: navigator.language, tz: Intl.DateTimeFormat().resolvedOptions().timeZone, screen: `${screen.width}x${screen.height}`, ua: browser + " " + (ua.match(/(?:Version|CriOS|Chrome|Firefox)\/(\d+)/)?.[1] || ""), appVersion: CFG.appVersion || "dev" };
+}
+function track(kind, meta) { try { fetch(API + "/events", { method: "POST", keepalive: true, headers: { "Content-Type": "application/json", "Bypass-Tunnel-Reminder": "true" }, body: JSON.stringify({ deviceId, kind, meta: meta || {}, client: clientFacts() }) }).catch(() => {}); } catch {} }
 const isStandalone = window.matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
 const hhmm = (iso) => new Intl.DateTimeFormat("nb-NO", { timeZone: "Europe/Oslo", hour: "2-digit", minute: "2-digit" }).format(new Date(iso));
 const fmtMin = n => Number.isFinite(n) ? String(Math.round(n * 10) / 10) : "–";
@@ -144,11 +152,11 @@ function renderOnboarding() {
   ];
   app.innerHTML = `<p class="small muted">${state.step ? `Steg ${state.step} av 3` : ""}</p><div class="steps" aria-hidden="true">${steps.map((_, i) => `<i class="${i <= state.step ? "on" : ""}"></i>`).join("")}</div><form class="card lift" id="stepcard">${steps[state.step]()}</form>`;
   const remember = () => store.set("onboardingDraft", d);
-  $("#wish-toggle")?.addEventListener("click", () => { $("#wish-row").hidden = false; $("#wish-toggle").hidden = true; $("#wish-text").focus(); });
+  $("#wish-toggle")?.addEventListener("click", () => { track("wish_opened"); $("#wish-row").hidden = false; $("#wish-toggle").hidden = true; $("#wish-text").focus(); });
   $("#wish-send")?.addEventListener("click", async () => { const t = $("#wish-text").value.trim(); if (t.length < 3) return toast("Skriv hvor du reiser fra og til."); try { await api("/wishes", { method: "POST", body: { deviceId, text: t } }); $("#wish-row").hidden = true; toast("Takk! Ønsket er lagret."); } catch (e) { toast("Fikk ikke lagret ønsket. Prøv igjen."); } });
   $("#wish-text")?.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); $("#wish-send").click(); } });
   $("#stepcard").addEventListener("submit", e => { e.preventDefault(); $("[data-next]")?.click(); });
-  app.querySelectorAll("[data-next]").forEach(b => b.addEventListener("click", () => { if (!$("#stepcard").reportValidity()) return; remember(); state.step = Math.min(steps.length - 1, state.step + 1); renderOnboarding(); $("h2")?.setAttribute("tabindex", "-1"); $("h2")?.focus(); }));
+  app.querySelectorAll("[data-next]").forEach(b => b.addEventListener("click", () => { if (!$("#stepcard").reportValidity()) return; if (state.step === 0) track("onboarding_start"); remember(); state.step = Math.min(steps.length - 1, state.step + 1); renderOnboarding(); $("h2")?.setAttribute("tabindex", "-1"); $("h2")?.focus(); }));
   app.querySelectorAll("[data-back]").forEach(b => b.addEventListener("click", () => { remember(); state.step = Math.max(0, state.step - 1); renderOnboarding(); }));
   const resetTimes = keys => {
     for (const key of keys) {
@@ -186,7 +194,8 @@ async function finishOnboarding(withPush) {
     if(!state.config.stations[profile.station] || !state.config.workAreas[profile.workArea]) throw new Error("Velg stasjon og arbeidsområde på nytt.");
     const push = withPush ? await subscribePush() : null;
     if (withPush && !push) return;
-    await answers.submit("/subscriptions", { deviceId, profile, push, slots: profile.slots, days: profile.days });
+    await answers.submit("/subscriptions", { deviceId, profile, push, slots: profile.slots, days: profile.days, client: clientFacts() });
+    track("onboarding_saved", { withPush: !!push, station: profile.station, workArea: profile.workArea });
     profile.pushEnabled = !!push || !!state.draft.pushEnabled;
     // Server receipt callback persisted the confirmed profile.
     toast(push ? "Reisen er lagret. Du kan nå sende et testvarsel." : "Reisen er lagret.");
@@ -199,10 +208,10 @@ async function subscribePush() {
   if (!state.pushSupported) return null;
   const reg = await navigator.serviceWorker.ready;
   const perm = await Notification.requestPermission();
-  if (perm !== "granted") { toast("Varsler ble ikke tillatt."); return null; }
+  if (perm !== "granted") { toast("Varsler ble ikke tillatt."); track("push_denied", { permission: perm }); return null; }
   const key = state.config?.vapidPublicKey || CFG.vapidPublicKey;
   const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(key) });
-  return sub.toJSON();
+  track("push_enabled"); return sub.toJSON();
 }
 
 function truthMark() {
@@ -258,7 +267,7 @@ function renderHome() {
       <span>Vei: Statens vegvesen DATEX II${v?.sources?.datex?.ageMin != null ? `, ${fmtMin(v.sources.datex.ageMin)} min gamle tall` : ""}. Tog: Entur Avviksvarsel og Journey Planner.</span>
       <span>${v ? "Reisen i dette kortet" : "Din reise"}: ${st.name} → ${area.label}. ${carBaselineSummary(v ? {carFreeFlowMin:v.car.freeFlowMin,parkingWalkMin:v.car.parkingWalkMin} : p)}</span>
     </section>`;
-  $("#btn-now").addEventListener("click", checkNow);
+  $("#btn-now").addEventListener("click", () => { track("check_now"); checkNow(); });
   $("#wish-send")?.addEventListener("click", async () => { const t = $("#wish-text").value.trim(); if (t.length < 3) return toast("Skriv hvor du reiser fra og til."); try { await api("/wishes", { method: "POST", body: { deviceId, text: t } }); $("#wish-text").value = ""; toast("Takk! Ønsket er lagret."); } catch (e) { toast("Fikk ikke lagret ønsket. Prøv igjen."); } });
   $("#wish-text")?.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); $("#wish-send").click(); } });
   $("#btn-test")?.addEventListener("click", async () => { try { await api(`/subscriptions/${deviceId}/test`, { method: "POST" }); toast("Testvarsel sendt. Sjekk varslingssenteret."); } catch (e) { toast("Klarte ikke sende: " + e.message); } });
@@ -310,13 +319,14 @@ window.addEventListener("demo-verdict", (e) => { state.latest = e.detail; state.
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("sw.js?api=" + encodeURIComponent(new URL(API, location.href).href), { updateViaCache: "none" }).catch((e) => console.warn("sw", e));
     navigator.serviceWorker.addEventListener("message", async (e) => {
-      if (e.data?.type === "open-verdict") { await loadVerdicts(); render(); }
+      if (e.data?.type === "open-verdict") { track("notification_click", { verdictId: e.data.verdictId || "" }); await loadVerdicts(); render(); }
       if (e.data?.type === "resubscribe" && state.profile) { try { await answers.submit("/subscriptions", { deviceId, profile: state.profile, push: e.data.subscription, slots: state.profile.slots, days: state.profile.days }); } catch {} }
     });
   }
   state.profile = store.get("profile");
   state.config = CFG.staticConfig ? { ...CFG.staticConfig, vapidPublicKey: CFG.vapidPublicKey } : { stations: {}, workAreas: {}, vapidPublicKey: CFG.vapidPublicKey };
   render(); // never make the first screen wait for the network
+  track("app_open", { hasProfile: !!state.profile, step: state.step });
   api("/config").then((c) => { state.config = c; if (!state.profile && state.step === 0) render(); }).catch(() => { if (!Object.keys(state.config.stations).length) toast("Får ikke kontakt med tjenesten. Prøv igjen om litt."); });
   if (state.profile) { await loadVerdicts(); render(); }
 })();
