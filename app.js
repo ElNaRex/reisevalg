@@ -19,7 +19,7 @@ const app = $("#app");
 const state = { profile: null, config: null, verdicts: [], latest: null, pushSupported: "serviceWorker" in navigator && "PushManager" in window, step: 0 };
 
 const HELP = {
-  dekning: ["Hvilke strekninger", "Vi trenger målt kjøretid fra Statens vegvesen for hele veien bilen kjører. I dag finnes det for E18 fra Sandvika og Høvik inn til Oslo. Vest for Holmen (Slependen, Asker, Lier, Brakerøya) publiserer Vegvesenet ikke tall ennå. Andre steder, som E6 fra Follo og Romerike, har tall, og kan bli neste. Ønsk deg en strekning, så prioriterer vi etter etterspørsel."],
+  dekning: ["Hvilke strekninger", "Vi trenger målt kjøretid fra Statens vegvesen for hele veien bilen kjører inn til Oslo. Det finnes for E18 fra Sandvika og innover, og for E6 fra Moss og fra Jessheim og innover, pluss Rv159 fra Lillestrøm. Vest for Holmen (Asker, Lier, Brakerøya) publiserer Vegvesenet ikke tall ennå. Lysaker/Fornebu mangler en målt avkjøring. Ønsk deg en strekning, så prioriterer vi etter etterspørsel."],
   installer: ["Slik får du varsler", "<b>iPhone:</b> åpne lenken i Safari, trykk Del-knappen (firkanten med pil opp), velg «Legg til på Hjem-skjerm», og åpne appen derfra. Bare da kan iPhone vise varsler fra en nettapp.<br><br><b>Android:</b> trykk menyen (⋮) i Chrome og «Legg til på startskjermen» eller «Installer app». Varsler virker også uten, men er sikrest med appen installert.<br><br>Til slutt trykker du «Lagre og slå på varsler» og godtar spørsmålet fra telefonen."],
   togreise: ["Togreisen", "Vi trenger to tider fra deg: hjemmefra til du står klar på perrongen (med kjøring, sykkel, parkering og gange), og fra stasjonen du kommer til og helt frem til jobb. Ventetid og selve togturen regner vi ut fra rutetabell og sanntid."],
   toStationMin: ["Hjem til perrongen", "Fra du går hjemmefra til du står klar til å gå om bord. Ta med eventuell kjøring eller sykling, parkering og gange. Ikke ta med venting på toget."],
@@ -116,7 +116,7 @@ function renderOnboarding() {
       <h1>Får du beskjed når toget slår bilen?</h1>
       <p>Hver hverdag kl. 06:30 og 07:00 regner vi bil mot tog for din reise. Du får varsel bare når toget vinner. ${Q("tilstand")}</p>
       ${installHint}
-      <p class="small"><b>Gjelder nå:</b> Sandvika og Høvik → Oslo S, sentrum vest og Skøyen. Andre stasjoner ser regnestykket, men får ikke varsel ennå. ${Q("dekning")}</p>
+      <p class="small"><b>Gjelder nå:</b> E18 fra Sandvika, Slependen og Høvik, E6 fra Ski, Ås, Vestby, Moss, Jessheim, Kløfta og Lillestrøm, inn til Oslo S, sentrum vest og Skøyen. Asker, Lier og Brakerøya ser regnestykket, men får ikke varsel ennå. ${Q("dekning")}</p>
       <div class="minute-input" id="wish-row" hidden><input id="wish-text" type="text" maxlength="200" placeholder="F.eks. Ski → Oslo S" enterkeyhint="send" style="max-width:none;flex:1"><button type="button" class="btn btn-secondary" id="wish-send" style="width:auto">Send</button></div>
       <button type="button" class="btn btn-ghost" id="wish-toggle" style="padding-left:0">Ikke din strekning? Ønsk deg en →</button>
       <button type="button" class="btn" data-next>Kom i gang</button>
@@ -124,7 +124,7 @@ function renderOnboarding() {
     () => `
       <h2>Togreisen ${Q("togreise")}</h2>
       <label class="field" for="f-station">Stasjonen du reiser fra
-        <select id="f-station" required><option value="">Velg stasjon</option>${Object.entries(stations).map(([id, station]) => `<option value="${id}" ${id === d.station ? "selected" : ""}>${station.name}</option>`).join("")}</select>
+        <select id="f-station" required><option value="">Velg stasjon</option>${[...new Set(Object.values(stations).map((s) => s.corridor || ""))].map((c) => `<optgroup label="${c || "Stasjoner"}">${Object.entries(stations).filter(([, s]) => (s.corridor || "") === c).map(([id, station]) => `<option value="${id}" ${id === d.station ? "selected" : ""}>${station.name}</option>`).join("")}</optgroup>`).join("")}</select>
       </label>
       <p id="station-coverage-note" class="hint" ${st.dark ? "" : "hidden"}>Vegvesenet mangler måling på deler av denne veien. Da svarer vi «vet ikke».</p>
       ${minutes("toStationMin", "Uten venting på toget.")}
