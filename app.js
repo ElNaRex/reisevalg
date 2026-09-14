@@ -2,7 +2,18 @@ import { answerQueue } from './answer-queue.mjs';
 import { MINUTE_FIELDS, minuteValue, carBaseline, carBaselineSummary, confirmedProfile } from "./journey-profile.mjs";
 // Reisevalg PWA. Vanilla JS, no build step. Screens: onboarding → home → settings.
 const CFG = window.REISEVALG_CONFIG;
-const API = CFG.apiBase.replace(/\/$/, "");
+// The API host may move (tunnel rotation, later Supabase). Order: the last base that worked on this device,
+// then config.js, then the discovery file. A base is kept only after /config answered.
+let API = (() => { try { const s = localStorage.getItem("apiBase"); if (s && /^https?:\/\//.test(s)) return s.replace(/\/$/, ""); } catch {} return CFG.apiBase.replace(/\/$/, ""); })();
+async function discoverApi() {
+  const candidates = [CFG.apiBase.replace(/\/$/, "")];
+  if (CFG.apiDiscoveryUrl) { try { const r = await fetch(CFG.apiDiscoveryUrl + (CFG.apiDiscoveryUrl.includes("?") ? "&" : "?") + "t=" + Date.now(), { cache: "no-store", signal: AbortSignal.timeout(8000) }); const j = await r.json(); if (j.apiBase && /^https:\/\//.test(j.apiBase)) candidates.unshift(j.apiBase.replace(/\/$/, "")); } catch {} }
+  for (const base of candidates) {
+    if (base === API) continue;
+    try { const r = await fetch(base + "/config", { headers: { "Bypass-Tunnel-Reminder": "true" }, signal: AbortSignal.timeout(8000) }); if (r.ok) { API = base; try { localStorage.setItem("apiBase", base); } catch {} return true; } } catch {}
+  }
+  return false;
+}
 const $ = (s, el = document) => el.querySelector(s);
 const app = $("#app");
 const state = { profile: null, config: null, verdicts: [], latest: null, pushSupported: "serviceWorker" in navigator && "PushManager" in window, step: 0 };
@@ -41,7 +52,10 @@ const Q = (key) => `<button class="q" type="button" data-help="${key}" aria-labe
 
 async function api(path, opts = {}) {
   // Bypass-Tunnel-Reminder: the API may sit behind localtunnel, which otherwise answers browsers with a reminder page.
-  const res = await fetch(API + path, { signal:AbortSignal.timeout(15000), headers: { "Content-Type": "application/json", "Bypass-Tunnel-Reminder": "true", ...(opts.headers || {}) }, ...opts, body: opts.body ? JSON.stringify(opts.body) : undefined });
+  let res;
+  try { res = await fetch(API + path, { signal:AbortSignal.timeout(12000), headers: { "Content-Type": "application/json", "Bypass-Tunnel-Reminder": "true", ...(opts.headers || {}) }, ...opts, body: opts.body ? JSON.stringify(opts.body) : undefined }); }
+  catch (e) { if (!opts._retried && await discoverApi()) return api(path, { ...opts, _retried: true }); throw e; }
+  if ((res.status === 408 || res.status === 502 || res.status === 503 || res.status === 504) && !opts._retried && await discoverApi()) return api(path, { ...opts, _retried: true });
   if (!res.ok) throw Object.assign(new Error(`${res.status} ${await res.text().catch(() => "")}`),{status:res.status});
   return res.status === 204 ? null : res.json();
 }
