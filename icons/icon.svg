@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <rect width="512" height="512" rx="112" fill="#181C56"/>
+  <!-- train front -->
+  <rect x="136" y="108" width="240" height="268" rx="72" fill="#ffffff"/>
+  <rect x="168" y="152" width="176" height="96" rx="24" fill="#181C56"/>
+  <circle cx="196" cy="304" r="22" fill="#181C56"/>
+  <circle cx="316" cy="304" r="22" fill="#181C56"/>
+  <rect x="236" y="286" width="40" height="36" rx="8" fill="#181C56"/>
+  <!-- rails -->
+  <rect x="120" y="404" width="272" height="16" rx="8" fill="#ffffff" opacity=".85"/>
+  <!-- the signal: today the train wins -->
+  <circle cx="392" cy="120" r="46" fill="#ff5959"/>
+</svg>

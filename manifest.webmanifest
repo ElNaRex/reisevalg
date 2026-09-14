@@ -1,0 +1,17 @@
+{
+  "name": "Reisevalg – i dag vinner toget",
+  "short_name": "Reisevalg",
+  "description": "Beskjed de morgenene toget faktisk slår bilen. Eksperiment fra Entur.",
+  "start_url": "./?source=pwa",
+  "scope": "./",
+  "id": "./",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#181C56",
+  "lang": "nb",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/icon-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

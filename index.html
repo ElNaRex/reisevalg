@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="nb">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Reisevalg</title>
+<meta name="description" content="Får du beskjed de morgenene toget faktisk slår bilen? Et eksperiment fra Entur.">
+<meta name="theme-color" content="#181C56">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Reisevalg">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700&display=swap">
+<link rel="stylesheet" href="styles.css">
+<script src="config.js"></script>
+</head>
+<body>
+<header class="top">
+  <div class="brand"><span class="mark" aria-hidden="true"></span><span>Reisevalg</span><span class="tag">eksperiment fra Entur</span></div>
+  <button class="icon-btn" id="btn-settings" aria-label="Innstillinger" hidden>⚙︎</button>
+</header>
+
+<main id="app" aria-live="polite">
+  <!-- rendered by app.js -->
+</main>
+
+<div class="popover-layer" id="popover" hidden>
+  <div class="popover" role="dialog" aria-modal="true" aria-labelledby="popover-title">
+    <h3 id="popover-title"></h3>
+    <div id="popover-body"></div>
+    <button class="btn btn-secondary" id="popover-close">Skjønner</button>
+  </div>
+</div>
+
+<div class="toast" id="toast" hidden></div>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>
