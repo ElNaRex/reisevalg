@@ -151,3 +151,7 @@ label.field .hint { font-weight: 400; color: var(--muted); font-size: .85rem; }
 .feedback textarea { width: 100%; box-sizing: border-box; padding: .6rem .7rem; border-radius: 10px; border: 1px solid var(--line); background: var(--soft); color: inherit; font: inherit; resize: vertical; min-height: 4.5rem; }
 .feedback textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .feedback .field { display: grid; gap: .35rem; margin-top: .75rem; }
+
+/* Handlingen kortet peker på. Den skal leses før regnestykket, så den får litt vekt uten å rope. */
+.plan { padding: .7rem .85rem; border-radius: 10px; background: var(--ground); border: 1px solid var(--win-line, var(--line)); margin: .6rem 0; }
+.verdict.INGEN_FORDEL .plan, .verdict.TOG_USIKKERT .plan, .verdict.VET_IKKE .plan { border-color: var(--line); }

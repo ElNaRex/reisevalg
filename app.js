@@ -275,6 +275,25 @@ const outcomeOf = (v) => {
 function truthMark(v) {
   return { treff: "vi traff", bom: "vi bommet", tapt: "vi burde varslet", riktig: "vi hadde rett" }[outcomeOf(v)] || "venter på svar";
 }
+// Dommen gjort om til en handling. Kortet sa hvem som vinner; den som leser det trenger å vite hvilket tog og
+// når hen må gå. Toget må være ett du faktisk rekker: første avgang i lista er ofte allerede uråd, og et kort
+// som ber deg ta et tog som går om ett minutt er verre enn ingen beskjed.
+function plan(v, stName) {
+  if (!["TOG_VINNER", "TOG_ALLTID"].includes(v?.state)) return "";
+  const toStation = Number.isFinite(v.train?.toStationMin) ? v.train.toStationMin : null;
+  const walk = Number.isFinite(v.train?.walkMin) ? v.train.walkMin : null;
+  const from = Date.now();
+  const reachable = (v.train?.next || []).find((t) => t.departs && t.arrives && !t.cancelled
+    && Date.parse(t.departs) - (toStation ?? 0) * 60000 >= from);
+  if (!reachable) return "";
+  const leaveMs = Date.parse(reachable.departs) - (toStation ?? 0) * 60000;
+  const inMin = Math.round((leaveMs - from) / 60000);
+  const naar = inMin <= 1 ? "Gå nå" : inMin < 60 ? `Gå om ${inMin} min` : `Gå ${hhmm(new Date(leaveMs).toISOString())}`;
+  const frem = hhmm(new Date(Date.parse(reachable.arrives) + (walk || 0) * 60000).toISOString());
+  return `<p class="plan"><b>${naar}</b> og ta ${reachable.line} ${hhmm(reachable.departs)} fra ${stName}.`
+    + ` Da er du framme ${walk ? "på jobb" : ""} ${frem}.</p>`.replace("framme  ", "framme ");
+}
+
 function truthLine(v) {
   const t = v?.truth, o = outcomeOf(v);
   const m = t?.actualSavedMin != null ? fmtMin(Math.abs(t.actualSavedMin)) : null;
@@ -310,6 +329,7 @@ function renderHome() {
       <p>${v.reason}</p>
       ${v.sources?.datex?.routeVerified !== true ? `<p class="small">Bilanslaget bruker en stasjonskorridor. Din påkjøring og faktiske bilrute er ikke verifisert. Ordinære varsler er sperret inntil ruten er avklart; testvarsel kan fortsatt brukes.</p>` : ""}
       ${v.savedMin != null && v.state === "TOG_VINNER" ? `<p><b>${v.sources?.datex?.routeVerified === true ? "Du sparer ca." : "Modellen anslår ca."} ${Math.round(v.savedMin)} min${v.sources?.datex?.routeVerified === true ? "." : " forskjell."}</b> ${Q("sparer")}</p>` : ""}
+      ${plan(v, stName)}
       <div class="compare">
         <div class="side"><span class="lbl">Bil i dag ${Q("bil")}</span><span class="num">${Math.round(v.car.totalMin)}<small> min</small></span><span class="parts">${v.car.totalMin != null ? `${v.car.freeFlowMin} fri flyt + ${fmtMin(Math.max(0, v.car.delayMin))} kø + ${v.car.parkingWalkMin} parkering` : "mangler grunnlag"}</span></div>
         <div class="side"><span class="lbl">Tog i dag ${Q("tog")}</span><span class="num">${Math.round(v.train.totalMin)}<small> min</small></span><span class="parts">${fmtMin(v.train.toStationMin)} til stasjon + ${fmtMin(v.train.waitMin)} venting + ${fmtMin(v.train.railMin)} tog + ${fmtMin(v.train.walkMin)} gange</span></div>
@@ -335,7 +355,7 @@ function renderHome() {
       ${v.train.alerts?.length ? `<p class="small"><b>Avviksvarsel:</b> ${v.train.alerts.map((a) => a.title).join("; ")}</p>` : `<p class="small muted">${v.sources?.railAlerts?.ok ? "Ingen sterke avviksvarsler blant reisene tjenesten dekker. Dette er ikke en garanti for at togene går normalt." : "Avviksvarsel kunne ikke bekreftes nå."}</p>`}
     </section>
     ${ACTIONS}
-    <section class="card feedback">
+    ${v.slot === "now" ? "" : `<section class="card feedback">
       <h3>Stemte det?</h3>
       <div class="row"><button class="btn btn-secondary" data-fb="useful">👍 Nyttig</button><button class="btn btn-secondary" data-fb="not_useful">👎 Ikke nyttig</button></div>
       <p class="small muted">Hva gjorde du i dag?</p>
@@ -345,7 +365,7 @@ function renderHome() {
       </label>
       <div class="row"><button class="btn btn-secondary" id="fb-send" style="width:auto">Send</button></div>
       <p class="small muted" id="fb-said" hidden></p>
-    </section>` : `
+    </section>`}` : `
     <section class="card verdict VET_IKKE"><div class="eyebrow">Ikke noe kort ennå</div><h1>Reisen din er lagret</h1><p>Første regnestykke kommer 06:30 neste hverdag. Du får varsel bare hvis toget vinner. «Sjekk nå» viser tallene akkurat nå.</p></section>
     ${ACTIONS}`}
     ${p.leaveAt === undefined || (p.leaveAt == null && !store.get("leaveAtDismissed")) ? `<section class="card ios-hint"><b>Nytt: si når du drar.</b> Da blir kortet en prognose for din avreise, ikke bare køen akkurat nå. <div class="row" style="margin-top:.5rem"><button class="btn btn-secondary" id="leave-edit" style="width:auto">Legg inn avreisetid</button><button class="btn btn-ghost" id="leave-dismiss" style="width:auto">Varierer</button></div></section>` : ""}
