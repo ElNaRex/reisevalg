@@ -44,7 +44,7 @@ const HELP = {
   togstatus: ["Togene i dag", "Avviksvarsel omfatter reisene tjenesten dekker. Tom varslingsliste er ingen garanti for normal trafikk. Journey Planner viser forventede tider, ikke dokumentasjon på faktisk ankomst."],
   tilstand: ["Hva kortet kan si", "«I dag vinner toget» er det eneste varselet vi sender, og bare når køen avgjør. Slår bilen toget, får du ingen melding. Åpner du appen, ser du likevel dagens regnestykke: «ingen togfordel», «toget er raskest uansett» (der toget slår bilen selv uten kø), «togene er usikre» eller «vet ikke». Vi sier aldri «ta bilen»."],
   test: ["Testperiode", "Du er med i en test med kolleger. Varsel kommer bare de morgenene toget vinner; de andre morgenene er det stille. Alt du svarer på kortet brukes til å måle om varselet treffer. Vi lagrer ingen adresse, bare stasjon, arbeidsområde og minuttene du oppgir."],
-  fasit: ["Fasit", "Hvert kort etterkontrolleres automatisk når kjøreturen din er over: vi henter køen Vegvesenet faktisk målte på veien din i det tidsrommet, og regner ut om toget vant. Du får se svaret her, også når det går i vår disfavør — sa vi ingenting og toget vant likevel, står det. Togtiden er fortsatt sanntidsprognosen fra da kortet gikk, ikke en målt ankomst, og bilturen er et modellanslag fra veidata og tidene du oppga, ikke en observert biltur."],
+  fasit: ["Stemte det?", "Når kjøreturen din er over, henter vi køen Vegvesenet målte på veien din mens du kjørte, og regner ut hvem som vant. Svaret står på kortet, også når vi tok feil. Varslet vi ikke, og toget vant likevel, sier vi det. Togtiden er sanntidsprognosen fra da kortet ble laget, ikke en målt ankomst. Bilturen er regnet ut fra veidata og tidene du oppga, ikke en biltur noen har kjørt."],
   ferskhet: ["Kilder og ferskhet", "Veidata: Statens vegvesen DATEX II, oppdatert hvert femte minutt. Tog: Entur Avviksvarsel og Journey Planner med sanntid. Kortet lages klokka 06:30 og 07:00 og bruker målingene som var ferske da."],
 };
 
@@ -271,19 +271,18 @@ const outcomeOf = (v) => {
   return t.missedWin ? "tapt" : "riktig";
 };
 function truthMark(v) {
-  return { treff: "traff", bom: "bommet", tapt: "toget vant likevel", riktig: "riktig stille" }[outcomeOf(v)] || "venter på fasit";
+  return { treff: "vi traff", bom: "vi bommet", tapt: "vi burde varslet", riktig: "vi hadde rett" }[outcomeOf(v)] || "venter på svar";
 }
 function truthLine(v) {
   const t = v?.truth, o = outcomeOf(v);
-  const saved = t?.actualSavedMin != null ? fmtMin(Math.abs(t.actualSavedMin)) : null;
-  if (o === "treff") return `<p class="small ok">Etterpå: toget var faktisk ${saved} min raskere. Vi traff. ${Q("fasit")}</p>`;
-  if (o === "bom") return `<p class="small warn">Etterpå: bilen var faktisk ${saved} min raskere. Vi bommet, og det telles mot oss. ${Q("fasit")}</p>`;
-  // The case worth being loudest about: no notification went out, and the train won anyway. «Sendte ingen
-  // melding» rather than «sa ingenting», because on a «toget vinner uansett» morning the card was there to
-  // read — what was missing was the nudge.
-  if (o === "tapt") return `<p class="small warn">Etterpå: vi sendte ingen melding i dag, men toget var faktisk ${saved} min raskere. Det er en tapt mulighet, og den telles mot oss. ${Q("fasit")}</p>`;
-  if (o === "riktig") return `<p class="small muted">Etterpå: bilen holdt seg best, akkurat som vi sa. ${Q("fasit")}</p>`;
-  return `<p class="small muted">Fasiten regnes ut når kjøreturen din er over: vi henter køen Vegvesenet faktisk målte på veien din i det tidsrommet. Togtiden er fortsatt sanntidsprognosen fra da kortet gikk, ikke en målt ankomst. ${Q("fasit")}</p>`;
+  const m = t?.actualSavedMin != null ? fmtMin(Math.abs(t.actualSavedMin)) : null;
+  // Viktigste først, én ting om gangen, aktiv form. Hver linje sier hva som skjedde, hva vi gjorde, og om vi
+  // hadde rett. Samme setningsbygning i alle fire, så den som leser dem etter hverandre kjenner igjen formen.
+  if (o === "treff") return `<p class="small ok">Toget var ${m} minutter raskere. Vi varslet, og det stemte. ${Q("fasit")}</p>`;
+  if (o === "bom") return `<p class="small warn">Bilen var ${m} minutter raskere. Vi varslet, og det var feil. ${Q("fasit")}</p>`;
+  if (o === "tapt") return `<p class="small warn">Toget var ${m} minutter raskere. Vi varslet ikke, og det var feil. ${Q("fasit")}</p>`;
+  if (o === "riktig") return `<p class="small muted">Bilen var ${m} minutter raskere. Vi varslet ikke, og det stemte. ${Q("fasit")}</p>`;
+  return `<p class="small muted">Vi regner ut svaret når kjøreturen din er over. Da henter vi køen Vegvesenet målte på veien din mens du kjørte. Togtiden er sanntidsprognosen fra da kortet ble laget, ikke en målt ankomst. ${Q("fasit")}</p>`;
 }
 function renderHome() {
   const p = state.profile;
