@@ -264,6 +264,8 @@ async function subscribePush() {
 // What actually happened, once the drive window has closed and the road archive has been read. These two were
 // stubs that always said «fasit ikke verifisert», written while the scoring was suspended. Every card is scored
 // automatically now, and the person who got it — or who got nothing — is the one entitled to know.
+// Korte former til listen. Kortets egen overskrift er for lang i en rad, og en rå tilstand er ikke et ord.
+const SAID = { TOG_VINNER: "Toget vinner", TOG_ALLTID: "Toget uansett", INGEN_FORDEL: "Ingen togfordel", TOG_USIKKERT: "Togene usikre", VET_IKKE: "Vet ikke" };
 const outcomeOf = (v) => {
   const t = v?.truth;
   if (!t?.scored) return null;
@@ -289,12 +291,14 @@ function renderHome() {
   const v = state.latest;
   const st = v?.station || state.config?.stations?.[p.station] || {};
   const area = v?.work || state.config?.workAreas?.[p.workArea] || {};
+  // Ett sted som gjør en tilstand om til ord. Sto før to steder, og listen i historikken manglet TOG_ALLTID,
+  // så den falt gjennom til råverdien og skrev «TOG_ALLTID» rett på skjermen.
   const title = { TOG_VINNER: `I dag vinner toget fra ${st.name}`, TOG_ALLTID: `Toget er raskest fra ${st.name} uansett`, INGEN_FORDEL: `Ingen togfordel i dag`, TOG_USIKKERT: `Kø på veien, men togene er usikre`, VET_IKKE: `Vet ikke i dag` };
   app.innerHTML = `
     ${v ? `
     <section class="card verdict ${v.state}" aria-labelledby="vh">
       <div class="eyebrow"><span>${dateLabel(v.issuedAt)} kl. ${v.slot === "now" ? hhmm(v.issuedAt) : v.slot}</span>${v.slot === "now" ? `<span class="pill">sjekket nå</span>` : ""}${CFG.testMode ? `<span class="pill">test</span>` : ""} ${Q("tilstand")}</div>
-      <h1 id="vh">${v.state === "TOG_VINNER" && v.sources?.datex?.routeVerified !== true ? "Modellen anslår togfordel" : title[v.state] || v.state}</h1>
+      <h1 id="vh">${v.state === "TOG_VINNER" && v.sources?.datex?.routeVerified !== true ? "Modellen anslår togfordel" : title[v.state] || "Vet ikke i dag"}</h1>
       <p>${v.reason}</p>
       ${v.sources?.datex?.routeVerified !== true ? `<p class="small">Bilanslaget bruker en stasjonskorridor. Din påkjøring og faktiske bilrute er ikke verifisert. Ordinære varsler er sperret inntil ruten er avklart; testvarsel kan fortsatt brukes.</p>` : ""}
       ${v.savedMin != null && v.state === "TOG_VINNER" ? `<p><b>${v.sources?.datex?.routeVerified === true ? "Du sparer ca." : "Modellen anslår ca."} ${fmtMin(v.savedMin)} min${v.sources?.datex?.routeVerified === true ? "." : " forskjell."}</b> ${Q("sparer")}</p>` : ""}
@@ -328,7 +332,7 @@ function renderHome() {
     <section class="card wish"><h3>Mangler din strekning?</h3><p class="small muted">Si hvor du reiser fra og til, så prioriterer vi etter ønskene.</p>
       <div class="minute-input"><input id="wish-text" type="text" maxlength="200" placeholder="F.eks. Ski → Oslo S" enterkeyhint="send" style="max-width:none;flex:1"><button class="btn btn-secondary" id="wish-send" style="width:auto">Send</button></div></section>
     <div class="row"><button class="btn" id="btn-now">Sjekk nå</button>${p.pushEnabled ? `<button class="btn btn-secondary" id="btn-test">Send testvarsel</button>` : `<button class="btn btn-secondary" id="btn-push">Slå på varsler</button>`}</div>
-    ${state.verdicts.length > 1 ? `<section class="card"><h3>Tidligere kort</h3><div class="history">${state.verdicts.slice(1, 12).map((h) => `<div class="hist"><span class="dot ${h.state}"></span><span>${dateLabel(h.issuedAt)} ${h.slot === "now" ? hhmm(h.issuedAt) : h.slot} · ${h.state === "TOG_VINNER" ? "Modellert togfordel fra " + h.station.name : {INGEN_FORDEL:"Ingen togfordel",TOG_USIKKERT:"Tog usikkert",VET_IKKE:"Vet ikke"}[h.state] || h.state}</span><span class="muted">${truthMark(h)}</span></div>`).join("")}</div></section>` : ""}
+    ${state.verdicts.length > 1 ? `<section class="card"><h3>Tidligere kort</h3><p class="small muted">Hva vi sa, og om det stemte.</p><div class="history">${state.verdicts.slice(1, 12).map((h) => `<div class="hist"><span class="dot ${h.state}"></span><span class="hist-when">${dateLabel(h.issuedAt)} ${h.slot === "now" ? hhmm(h.issuedAt) : h.slot}</span><span class="hist-said">${SAID[h.state] || "Vet ikke"}</span><span class="hist-out ${outcomeOf(h) || "venter"}">${truthMark(h)}</span></div>`).join("")}</div></section>` : ""}
     <section class="sources">
       <span><b>Kilder</b> ${Q("ferskhet")}</span>
       <span>Vei: Statens vegvesen DATEX II${v?.sources?.datex?.ageMin != null ? `, ${fmtMin(v.sources.datex.ageMin)} min gamle tall` : ""}. Tog: Entur Avviksvarsel og Journey Planner.</span>
