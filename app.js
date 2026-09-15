@@ -4,8 +4,17 @@ import { MINUTE_FIELDS, minuteValue, carBaseline, carBaselineSummary, confirmedP
 const CFG = window.REISEVALG_CONFIG;
 // The API host may move (tunnel rotation, later Supabase). Order: the last base that worked on this device,
 // then config.js, then the discovery file. A base is kept only after /config answered.
-let API = (() => { try { const s = localStorage.getItem("apiBase"); if (s && /^https?:\/\//.test(s)) return s.replace(/\/$/, ""); } catch {} return CFG.apiBase.replace(/\/$/, ""); })();
+// A relative apiBase ("/api") means the page and the API are the same service, which cannot move and cannot be
+// blocked by a network. Any address remembered from the old tunnel is then wrong, and is forgotten here — that
+// is what carries an already-installed app over to the hosted version without anyone reinstalling anything.
+const SAME_ORIGIN_API = CFG.apiBase.startsWith("/");
+let API = (() => {
+  if (SAME_ORIGIN_API) { try { localStorage.removeItem("apiBase"); } catch {} return CFG.apiBase.replace(/\/$/, ""); }
+  try { const s = localStorage.getItem("apiBase"); if (s && /^https?:\/\//.test(s)) return s.replace(/\/$/, ""); } catch {}
+  return CFG.apiBase.replace(/\/$/, "");
+})();
 async function discoverApi() {
+  if (SAME_ORIGIN_API) return false;    // nothing to discover: the API is wherever this page came from
   const candidates = [CFG.apiBase.replace(/\/$/, "")];
   if (CFG.apiDiscoveryUrl) { try { const r = await fetch(CFG.apiDiscoveryUrl + (CFG.apiDiscoveryUrl.includes("?") ? "&" : "?") + "t=" + Date.now(), { cache: "no-store", signal: AbortSignal.timeout(8000) }); const j = await r.json(); if (j.apiBase && /^https:\/\//.test(j.apiBase)) candidates.unshift(j.apiBase.replace(/\/$/, "")); } catch {} }
   for (const base of candidates) {
@@ -31,11 +40,11 @@ const HELP = {
   bil: ["Bil i dag", "Kjøretiden uten kø du oppga + modellert køtillegg + parkering og gange til jobb. Dine egne tider er anslag. DATEX beskriver veistrekninger, ikke en observert personlig biltur."],
   tog: ["Tog i dag", "Tiden du bruker til stasjonen, ventetid til neste tog etter at du rekker fram, togets kjøretid med sanntid fra Entur, og gangen fra stasjonen til jobb."],
   sparer: ["Du sparer", "Bil i dag minus tog i dag. Vi sier bare at toget vinner når differansen er minst 10 minutter og togene i ditt tidsvindu ikke har varsler i Avviksvarsel. Hvis køen er i ferd med å løse seg opp krever vi 15."],
-  kø: ["Forsinkelse på E18", "Summen av målt reisetid minus fri flyt på strekningene Statens vegvesen dekker mot Oslo. Trenden sier om køen øker, er stabil eller avtar. Lier–Holmen mangler måling i dag, så for Lier og Brakerøya kan vi ikke svare før Vegvesenet skrur på strekningen."],
+  kø: ["Køen på veien din", "Summen av målt reisetid minus fri flyt på strekningene Statens vegvesen dekker inn mot Oslo, på den veien du faktisk ville kjørt: E18 vest, E6 nord, E6 sør eller Mosseveien. Finnes det en reell omvei, regner vi begge og bruker den raskeste den morgenen. Trenden sier om køen øker, er stabil eller avtar. Strekningen Lier–Holmen mangler måling, så for Lier, Brakerøya og Asker kan vi ikke svare før Vegvesenet skrur den på."],
   togstatus: ["Togene i dag", "Avviksvarsel omfatter reisene tjenesten dekker. Tom varslingsliste er ingen garanti for normal trafikk. Journey Planner viser forventede tider, ikke dokumentasjon på faktisk ankomst."],
-  tilstand: ["Hva kortet kan si", "«I dag vinner toget» er det eneste varselet vi sender, og bare når køen avgjør. Slår bilen toget, får du ingen melding. Åpner du appen, ser du likevel dagens regnestykke: «ingen togfordel», «toget er raskest uansett» (der toget alltid slår bilen, som fra Ski), «togene er usikre» eller «vet ikke». Vi sier aldri «ta bilen»."],
+  tilstand: ["Hva kortet kan si", "«I dag vinner toget» er det eneste varselet vi sender, og bare når køen avgjør. Slår bilen toget, får du ingen melding. Åpner du appen, ser du likevel dagens regnestykke: «ingen togfordel», «toget er raskest uansett» (der toget slår bilen selv uten kø), «togene er usikre» eller «vet ikke». Vi sier aldri «ta bilen»."],
   test: ["Testperiode", "Du er med i en test med kolleger. Varsel kommer bare de morgenene toget vinner; de andre morgenene er det stille. Alt du svarer på kortet brukes til å måle om varselet treffer. Vi lagrer ingen adresse, bare stasjon, arbeidsområde og minuttene du oppgir."],
-  fasit: ["Fasit", "Automatisk etterkontroll er suspendert. Togtidene er prognoser. Bilalternativet er et modellanslag fra DATEX og dine oppgitte tider, ikke en observert personlig biltur. Vi har ennå ikke verifisert om anbefalingene traff."],
+  fasit: ["Fasit", "Hvert kort etterkontrolleres automatisk når kjøreturen din er over: vi henter køen Vegvesenet faktisk målte på strekningene dine i det tidsrommet, og regner ut om toget vant. Treff og bom vises i dashbordet, kort for kort. Togtiden er fortsatt sanntidsprognosen fra da kortet gikk, ikke en målt ankomst, og bilturen er et modellanslag fra veidata og tidene du oppga, ikke en observert biltur."],
   ferskhet: ["Kilder og ferskhet", "Veidata: Statens vegvesen DATEX II, oppdatert hvert femte minutt. Tog: Entur Avviksvarsel og Journey Planner med sanntid. Kortet lages klokka 06:30 og 07:00 og bruker målingene som var ferske da."],
 };
 
