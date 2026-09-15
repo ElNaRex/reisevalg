@@ -262,6 +262,7 @@ function renderHome() {
       <div class="row"><button class="btn btn-secondary" data-fb="took_train">Tok toget</button><button class="btn btn-secondary" data-fb="took_car">Tok bilen</button><button class="btn btn-secondary" data-fb="wfh">Hjemme</button></div>
     </section>` : `
     <section class="card verdict VET_IKKE"><div class="eyebrow">Ikke noe kort ennå</div><h1>Reisen din er lagret</h1><p>Første regnestykke kommer 06:30 neste hverdag. Du får varsel bare hvis toget vinner. «Sjekk nå» viser tallene akkurat nå.</p></section>`}
+    ${p.leaveAt === undefined || (p.leaveAt == null && !store.get("leaveAtDismissed")) ? `<section class="card ios-hint"><b>Nytt: si når du drar.</b> Da blir kortet en prognose for din avreise, ikke bare køen akkurat nå. <div class="row" style="margin-top:.5rem"><button class="btn btn-secondary" id="leave-edit" style="width:auto">Legg inn avreisetid</button><button class="btn btn-ghost" id="leave-dismiss" style="width:auto">Varierer</button></div></section>` : ""}
     <section class="card wish"><h3>Mangler din strekning?</h3><p class="small muted">Si hvor du reiser fra og til, så prioriterer vi etter ønskene.</p>
       <div class="minute-input"><input id="wish-text" type="text" maxlength="200" placeholder="F.eks. Ski → Oslo S" enterkeyhint="send" style="max-width:none;flex:1"><button class="btn btn-secondary" id="wish-send" style="width:auto">Send</button></div></section>
     <div class="row"><button class="btn" id="btn-now">Sjekk nå</button>${p.pushEnabled ? `<button class="btn btn-secondary" id="btn-test">Send testvarsel</button>` : `<button class="btn btn-secondary" id="btn-push">Slå på varsler</button>`}</div>
@@ -272,6 +273,8 @@ function renderHome() {
       <span>${v ? "Reisen i dette kortet" : "Din reise"}: ${st.name} → ${area.label}. ${carBaselineSummary(v ? {carFreeFlowMin:v.car.freeFlowMin,parkingWalkMin:v.car.parkingWalkMin} : p)}</span>
     </section>`;
   $("#btn-now").addEventListener("click", () => { track("check_now"); checkNow(); });
+  $("#leave-edit")?.addEventListener("click", () => { state.draft = { ...p }; state.profile = null; state.step = 1; render(); });
+  $("#leave-dismiss")?.addEventListener("click", () => { store.set("leaveAtDismissed", true); render(); });
   $("#wish-send")?.addEventListener("click", async () => { const t = $("#wish-text").value.trim(); if (t.length < 3) return toast("Skriv hvor du reiser fra og til."); try { await api("/wishes", { method: "POST", body: { deviceId, text: t } }); $("#wish-text").value = ""; toast("Takk! Ønsket er lagret."); } catch (e) { toast("Fikk ikke lagret ønsket. Prøv igjen."); } });
   $("#wish-text")?.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); $("#wish-send").click(); } });
   $("#btn-test")?.addEventListener("click", async () => { try { await api(`/subscriptions/${deviceId}/test`, { method: "POST" }); toast("Testvarsel sendt. Sjekk varslingssenteret."); } catch (e) { toast("Klarte ikke sende: " + e.message); } });
@@ -322,6 +325,9 @@ window.addEventListener("demo-verdict", (e) => { state.latest = e.detail; state.
 (async function boot() {
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("sw.js?api=" + encodeURIComponent(new URL(API, location.href).href), { updateViaCache: "none" }).catch((e) => console.warn("sw", e));
+    // A new version of the app activates in the background; offer one tap to load it (no reinstall, ever).
+    let hadController = !!navigator.serviceWorker.controller;
+    navigator.serviceWorker.addEventListener("controllerchange", () => { if (hadController) { const t = $("#toast"); t.innerHTML = 'Ny versjon av Reisevalg er klar. <button class="chip" id="reload-now" style="margin-left:.4rem">Oppdater</button>'; t.hidden = false; $("#reload-now").addEventListener("click", () => location.reload()); } hadController = true; });
     navigator.serviceWorker.addEventListener("message", async (e) => {
       if (e.data?.type === "open-verdict") { track("notification_click", { verdictId: e.data.verdictId || "" }); await loadVerdicts(); render(); }
       if (e.data?.type === "resubscribe" && state.profile) { try { await answers.submit("/subscriptions", { deviceId, profile: state.profile, push: e.data.subscription, slots: state.profile.slots, days: state.profile.days }); } catch {} }
