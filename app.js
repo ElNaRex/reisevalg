@@ -19,7 +19,7 @@ const app = $("#app");
 const state = { profile: null, config: null, verdicts: [], latest: null, pushSupported: "serviceWorker" in navigator && "PushManager" in window, step: 0 };
 
 const HELP = {
-  dekning: ["Hvilke strekninger", "Vi trenger målt kjøretid fra Statens vegvesen for hele veien bilen kjører inn til Oslo. Det finnes for E18 fra Sandvika og innover, og for E6 fra Moss og fra Jessheim og innover, pluss Rv159 fra Lillestrøm. Vest for Holmen (Asker, Lier, Brakerøya) publiserer Vegvesenet ikke tall ennå. Lysaker/Fornebu mangler en målt avkjøring. Ønsk deg en strekning, så prioriterer vi etter etterspørsel."],
+  dekning: ["Hvilke strekninger", "Vi trenger målt kjøretid fra Statens vegvesen for hele veien bilen kjører inn til Oslo. Det finnes for E18 vest fra Sandvika og innover, for E6 sør fra Moss og innover, for E18 Mosseveien fra Fiskevollbukta og innover, og for E6 nord fra Jessheim, pluss Rv159 fra Lillestrøm. Vest for Holmen (Asker, Lier, Brakerøya) publiserer Vegvesenet ikke tall ennå. Lysaker/Fornebu mangler en målt avkjøring. Ønsk deg en strekning, så prioriterer vi etter etterspørsel."],
   installer: ["Slik får du varsler", "<b>iPhone:</b> åpne lenken i Safari, trykk Del-knappen (firkanten med pil opp), velg «Legg til på Hjem-skjerm», og åpne appen derfra. Bare da kan iPhone vise varsler fra en nettapp.<br><br><b>Android:</b> trykk menyen (⋮) i Chrome og «Legg til på startskjermen» eller «Installer app». Varsler virker også uten, men er sikrest med appen installert.<br><br>Til slutt trykker du «Lagre og slå på varsler» og godtar spørsmålet fra telefonen."],
   avreise: ["Når drar du?", "Kortet kommer 06:30 og 07:00, men regner for tidspunktet du faktisk drar. Drar du 07:30, sier kortet hva vi venter av kø på veien da, ut fra køen nå, hvordan den utvikler seg, og hva som er vanlig på denne veien på dette tidspunktet. Uten svar regner vi med at du drar ti minutter etter kortet."],
   togreise: ["Togreisen", "Vi trenger to tider fra deg: hjemmefra til du står klar på perrongen (med kjøring, sykkel, parkering og gange), og fra stasjonen du kommer til og helt frem til jobb. Ventetid og selve togturen regner vi ut fra rutetabell og sanntid."],
@@ -83,6 +83,20 @@ const answers=answerQueue(localStorage,(path,body)=>api(path,{method:'POST',body
  }
 },fn=>{if(!navigator.locks)throw Error('Nettleseren mangler trygg sendekø. Oppdater nettleseren.');return navigator.locks.request('reisevalg-answers',fn);},()=>location.reload());
 async function retryAnswers(){try{await answers.flush();render();}catch{toast('Svar venter på bekreftet lagring. Hold appen åpen med nett og prøv igjen.',6000);}}
+
+// The API lives behind a tunnel whose address changes when the tunnel restarts. A save that fell in that gap
+// stays in the queue; send it again as soon as the device is back online, the app is looked at, or a minute
+// has passed, rediscovering the address first. Nothing is lost, and the user does not have to press anything.
+let autoRetryAt = 0;
+async function autoRetryAnswers(reason) {
+  if (!answers.pending() || Date.now() < autoRetryAt) return;
+  autoRetryAt = Date.now() + 20000;
+  try { await discoverApi(); } catch {}
+  try { await answers.flush(); track("save_retry_ok", { reason }); toast("Reisen er lagret."); render(); } catch {}
+}
+addEventListener("online", () => autoRetryAnswers("online"));
+document.addEventListener("visibilitychange", () => { if (!document.hidden) autoRetryAnswers("visible"); });
+setInterval(() => autoRetryAnswers("timer"), 60000);
 window.addEventListener('online',retryAnswers);
 setTimeout(retryAnswers,1000);
 function urlBase64ToUint8Array(s) { const pad = "=".repeat((4 - (s.length % 4)) % 4); const b = atob((s + pad).replace(/-/g, "+").replace(/_/g, "/")); return Uint8Array.from(b, (c) => c.charCodeAt(0)); }
@@ -117,7 +131,7 @@ function renderOnboarding() {
       <h1>Får du beskjed når toget slår bilen?</h1>
       <p>Hver hverdag kl. 06:30 og 07:00 regner vi bil mot tog for din reise. Du får varsel bare når toget vinner. ${Q("tilstand")}</p>
       ${installHint}
-      <p class="small"><b>Gjelder nå:</b> E18 fra Sandvika, Slependen og Høvik, E6 fra Ski, Ås, Vestby, Moss, Jessheim, Kløfta og Lillestrøm, inn til Oslo S, sentrum vest og Skøyen. Asker, Lier og Brakerøya ser regnestykket, men får ikke varsel ennå. ${Q("dekning")}</p>
+      <p class="small"><b>Gjelder nå:</b> E18 vest fra Sandvika, Slependen og Høvik. E6 sør fra Ski, Ås, Langhus, Vevelstad, Oppegård, Vestby og Moss. E18 Mosseveien fra Kolbotn og Holmlia. E6 nord og Rv159 fra Jessheim, Kløfta og Lillestrøm. Inn til Oslo S, sentrum vest og Skøyen. Asker, Lier og Brakerøya ser regnestykket, men får ikke varsel ennå. ${Q("dekning")}</p>
       <div class="minute-input" id="wish-row" hidden><input id="wish-text" type="text" maxlength="200" placeholder="F.eks. Ski → Oslo S" enterkeyhint="send" style="max-width:none;flex:1"><button type="button" class="btn btn-secondary" id="wish-send" style="width:auto">Send</button></div>
       <button type="button" class="btn btn-ghost" id="wish-toggle" style="padding-left:0">Ikke din strekning? Ønsk deg en →</button>
       <button type="button" class="btn" data-next>Kom i gang</button>
@@ -125,7 +139,7 @@ function renderOnboarding() {
     () => `
       <h2>Togreisen ${Q("togreise")}</h2>
       <label class="field" for="f-station">Stasjonen du reiser fra
-        <select id="f-station" required><option value="">Velg stasjon</option>${[...new Set(Object.values(stations).map((s) => s.corridor || ""))].map((c) => `<optgroup label="${c || "Stasjoner"}">${Object.entries(stations).filter(([, s]) => (s.corridor || "") === c).map(([id, station]) => `<option value="${id}" ${id === d.station ? "selected" : ""}>${station.name}</option>`).join("")}</optgroup>`).join("")}</select>
+        <select id="f-station" required><option value="">Velg stasjon</option>${["E18 vest", "E18 Mosseveien", "E6 sør", "E6 nord"].filter((c) => Object.values(stations).some((s) => (s.corridor || "") === c)).concat([...new Set(Object.values(stations).map((s) => s.corridor || ""))].filter((c) => !["E18 vest", "E18 Mosseveien", "E6 sør", "E6 nord"].includes(c))).map((c) => `<optgroup label="${c || "Stasjoner"}">${Object.entries(stations).filter(([, s]) => (s.corridor || "") === c).map(([id, station]) => `<option value="${id}" ${id === d.station ? "selected" : ""}>${station.name}</option>`).join("")}</optgroup>`).join("")}</select>
       </label>
       <p id="station-coverage-note" class="hint" ${st.dark ? "" : "hidden"}>Vegvesenet mangler måling på deler av denne veien. Da svarer vi «vet ikke».</p>
       <div class="field"><label>Når drar du vanligvis hjemmefra? ${Q("avreise")}</label><div class="chips" data-chips="leaveAt">${["06:40", "07:00", "07:15", "07:30", "07:45", "08:00", "08:15"].map((t) => `<button type="button" class="chip" data-v="${t}" aria-pressed="${d.leaveAt === t}">${t}</button>`).join("")}<button type="button" class="chip" data-v="" aria-pressed="${!d.leaveAt}">Varierer</button></div></div>
@@ -195,25 +209,45 @@ async function finishOnboarding(withPush) {
   try {
     const profile = { ...confirmedProfile(state.draft), deviceId };
     if(!state.config.stations[profile.station] || !state.config.workAreas[profile.workArea]) throw new Error("Velg stasjon og arbeidsområde på nytt.");
+    let stage = "varsler";
     const push = withPush ? await subscribePush() : null;
     if (withPush && !push) return;
-    await answers.submit("/subscriptions", { deviceId, profile, push, slots: profile.slots, days: profile.days, client: clientFacts() });
+    stage = "lagring";
+    try { await answers.submit("/subscriptions", { deviceId, profile, push, slots: profile.slots, days: profile.days, client: clientFacts() }); }
+    catch (e) {
+      // The address may have moved while they were filling in the form: rediscover it and send once more.
+      if (await discoverApi().catch(() => false)) { try { await answers.flush(); e.recovered = true; } catch {} }
+      if (!e.recovered) { e.stage = stage; throw e; }
+    }
     track("onboarding_saved", { withPush: !!push, station: profile.station, workArea: profile.workArea });
     profile.pushEnabled = !!push || !!state.draft.pushEnabled;
     // Server receipt callback persisted the confirmed profile.
     toast(push ? "Reisen er lagret. Du kan nå sende et testvarsel." : "Reisen er lagret.");
     await loadVerdicts();
-  } catch (e) { console.error(e); toast("Fikk ikke lagret. Reisen er beholdt; prøv igjen."); }
+  } catch (e) {
+    console.error(e);
+    // Say what failed, and log it (no personal data) so we can see it in the dashboard the next morning.
+    const why = e?.status === 400 ? "skjema" : e?.status === 410 ? "slettet" : e?.stage === "lagring" ? "nett" : "varsler";
+    track("save_failed", { why, stage: e?.stage || "varsler", name: String(e?.name || "").slice(0, 40), message: String(e?.message || "").slice(0, 120), status: e?.status || null });
+    toast(why === "skjema" ? "Tjenesten avviste tidene. Sjekk at alle felt er hele minutter, og prøv igjen."
+      : why === "nett" ? "Fikk ikke kontakt med tjenesten. Reisen er beholdt her; prøv igjen om et minutt."
+      : why === "slettet" ? "Denne enheten er slettet hos tjenesten. Last siden på nytt og registrer deg igjen."
+      : "Varsler kunne ikke slås på i denne nettleseren. Du kan lagre uten varsler og prøve igjen senere.");
+    if (why === "nett") toast("Reisen ligger klar her og sendes automatisk så snart tjenesten svarer.", 6000);
+  }
   finally { state.saving = false; render(); }
 }
 
 async function subscribePush() {
   if (!state.pushSupported) return null;
-  const reg = await navigator.serviceWorker.ready;
+  // serviceWorker.ready can hang forever if registration failed; give it ten seconds and say so.
+  const reg = await Promise.race([navigator.serviceWorker.ready, new Promise((_, rej) => setTimeout(() => rej(Object.assign(new Error("Service worker ble ikke klar"), { name: "SwNotReady" })), 10000))]);
   const perm = await Notification.requestPermission();
   if (perm !== "granted") { toast("Varsler ble ikke tillatt."); track("push_denied", { permission: perm }); return null; }
   const key = state.config?.vapidPublicKey || CFG.vapidPublicKey;
-  const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(key) });
+  let sub;
+  try { sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(key) }); }
+  catch (e) { track("push_subscribe_failed", { name: String(e?.name || "").slice(0, 40), message: String(e?.message || "").slice(0, 120) }); throw e; }
   track("push_enabled"); return sub.toJSON();
 }
 
