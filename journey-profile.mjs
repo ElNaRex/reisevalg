@@ -42,6 +42,7 @@ export function confirmedProfile(draft, confirmedAt = new Date().toISOString()) 
     ...Object.fromEntries(Object.keys(MINUTE_FIELDS).map(k => [k, draft[k]])),
     unknownFields: Object.keys(MINUTE_FIELDS).filter(k => draft[k] === null),
     slots: [...draft.slots], days: [...draft.days],
+    leaveAt: typeof draft.leaveAt === "string" && /^\d\d:\d\d$/.test(draft.leaveAt) ? draft.leaveAt : null,
     profileSchemaVersion: 2,
     timeInputs: { basis: "user_estimate", confirmedAt },
   };

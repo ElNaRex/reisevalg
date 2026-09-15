@@ -21,6 +21,7 @@ const state = { profile: null, config: null, verdicts: [], latest: null, pushSup
 const HELP = {
   dekning: ["Hvilke strekninger", "Vi trenger målt kjøretid fra Statens vegvesen for hele veien bilen kjører inn til Oslo. Det finnes for E18 fra Sandvika og innover, og for E6 fra Moss og fra Jessheim og innover, pluss Rv159 fra Lillestrøm. Vest for Holmen (Asker, Lier, Brakerøya) publiserer Vegvesenet ikke tall ennå. Lysaker/Fornebu mangler en målt avkjøring. Ønsk deg en strekning, så prioriterer vi etter etterspørsel."],
   installer: ["Slik får du varsler", "<b>iPhone:</b> åpne lenken i Safari, trykk Del-knappen (firkanten med pil opp), velg «Legg til på Hjem-skjerm», og åpne appen derfra. Bare da kan iPhone vise varsler fra en nettapp.<br><br><b>Android:</b> trykk menyen (⋮) i Chrome og «Legg til på startskjermen» eller «Installer app». Varsler virker også uten, men er sikrest med appen installert.<br><br>Til slutt trykker du «Lagre og slå på varsler» og godtar spørsmålet fra telefonen."],
+  avreise: ["Når drar du?", "Kortet kommer 06:30 og 07:00, men regner for tidspunktet du faktisk drar. Drar du 07:30, sier kortet hva vi venter av kø på veien da, ut fra køen nå, hvordan den utvikler seg, og hva som er vanlig på denne veien på dette tidspunktet. Uten svar regner vi med at du drar ti minutter etter kortet."],
   togreise: ["Togreisen", "Vi trenger to tider fra deg: hjemmefra til du står klar på perrongen (med kjøring, sykkel, parkering og gange), og fra stasjonen du kommer til og helt frem til jobb. Ventetid og selve togturen regner vi ut fra rutetabell og sanntid."],
   toStationMin: ["Hjem til perrongen", "Fra du går hjemmefra til du står klar til å gå om bord. Ta med eventuell kjøring eller sykling, parkering og gange. Ikke ta med venting på toget."],
   walkFromStationMin: ["Fra stasjonen til jobb", "Fra du går av toget til du er fremme på jobb, inkludert veien ut av stasjonen."],
@@ -94,7 +95,7 @@ function render() {
 }
 
 function renderOnboarding() {
-  const d = state.draft || (state.draft = store.get("onboardingDraft") || { station: "", workArea: "", toStationMin: null, walkFromStationMin: null, carFreeFlowMin: null, parkingWalkMin: null, slots: ["06:30", "07:00"], days: [0, 1, 2, 3, 4] });
+  const d = state.draft || (state.draft = store.get("onboardingDraft") || { station: "", workArea: "", toStationMin: null, walkFromStationMin: null, carFreeFlowMin: null, parkingWalkMin: null, leaveAt: null, slots: ["06:30", "07:00"], days: [0, 1, 2, 3, 4] });
   const stations = state.config?.stations || {};
   const areas = state.config?.workAreas || {};
   const st = stations[d.station] || {};
@@ -127,6 +128,7 @@ function renderOnboarding() {
         <select id="f-station" required><option value="">Velg stasjon</option>${[...new Set(Object.values(stations).map((s) => s.corridor || ""))].map((c) => `<optgroup label="${c || "Stasjoner"}">${Object.entries(stations).filter(([, s]) => (s.corridor || "") === c).map(([id, station]) => `<option value="${id}" ${id === d.station ? "selected" : ""}>${station.name}</option>`).join("")}</optgroup>`).join("")}</select>
       </label>
       <p id="station-coverage-note" class="hint" ${st.dark ? "" : "hidden"}>Vegvesenet mangler måling på deler av denne veien. Da svarer vi «vet ikke».</p>
+      <div class="field"><label>Når drar du vanligvis hjemmefra? ${Q("avreise")}</label><div class="chips" data-chips="leaveAt">${["06:40", "07:00", "07:15", "07:30", "07:45", "08:00", "08:15"].map((t) => `<button type="button" class="chip" data-v="${t}" aria-pressed="${d.leaveAt === t}">${t}</button>`).join("")}<button type="button" class="chip" data-v="" aria-pressed="${!d.leaveAt}">Varierer</button></div></div>
       ${minutes("toStationMin", "Uten venting på toget.")}
       <label class="field" for="f-work">Der du jobber
         <select id="f-work" required><option value="">Velg område</option>${Object.entries(areas).map(([id, area]) => `<option value="${id}" ${id === d.workArea ? "selected" : ""}>${area.label}</option>`).join("")}</select>
@@ -143,7 +145,7 @@ function renderOnboarding() {
     () => `
       <h2>Stemmer dette?</h2>
       ${d.profileSchemaVersion !== 2 && d.deviceId ? `<p class="ios-hint">Tidene kommer fra det gamle oppsettet. Sjekk at de stemmer før du lagrer.</p>` : ""}
-      <div class="card"><p><b>${st.name || ""}</b> → ${areas[d.workArea]?.label || ""}</p><p><b>Bil uten kø:</b> ${sum == null ? "mangler tider" : sum + " min"} (${d.carFreeFlowMin ?? "?"} kjøring + ${d.parkingWalkMin ?? "?"} parkering og gange)</p><p><b>Tog:</b> ${d.toStationMin ?? "?"} min til perrongen + venting + toget + ${d.walkFromStationMin ?? "?"} min til jobb</p></div>
+      <div class="card"><p><b>${st.name || ""}</b> → ${areas[d.workArea]?.label || ""}</p><p><b>Bil uten kø:</b> ${sum == null ? "mangler tider" : sum + " min"} (${d.carFreeFlowMin ?? "?"} kjøring + ${d.parkingWalkMin ?? "?"} parkering og gange)</p><p><b>Tog:</b> ${d.toStationMin ?? "?"} min til perrongen + venting + toget + ${d.walkFromStationMin ?? "?"} min til jobb</p><p><b>Avreise:</b> ${d.leaveAt ? "vanligvis kl. " + d.leaveAt : "varierer, vi regner fra kortet kommer"}</p></div>
       <p>Varsel 06:30 og 07:00 på hverdager, bare når toget vinner. ${Q("tilstand")}</p>
       ${isIOS && !isStandalone ? `<div class="ios-hint"><b>iPhone:</b> varsler krever at appen ligger på Hjem-skjermen. ${Q("installer")} Du kan lagre nå og slå på varsler etterpå.</div>` : ""}
       ${!state.pushSupported ? `<div class="ios-hint">Denne nettleseren støtter ikke varsler. Du kan lagre og bruke «Sjekk nå».</div>` : ""}
@@ -175,6 +177,7 @@ function renderOnboarding() {
     remember(); renderOnboarding();
   }));
   app.querySelectorAll("[data-done]").forEach(b => b.addEventListener("click", () => { document.activeElement?.blur(); b.blur(); }));
+  app.querySelectorAll('[data-chips="leaveAt"] .chip').forEach(b => b.addEventListener("click", () => { d.leaveAt = b.dataset.v || null; remember(); app.querySelectorAll('[data-chips="leaveAt"] .chip').forEach(x => x.setAttribute("aria-pressed", String(x === b))); }));
   app.querySelectorAll("[data-suggest]").forEach(b => b.addEventListener("click", () => { const input = $(`#f-${b.dataset.suggest}`); if (!input) return; input.value = b.dataset.v; input.dispatchEvent(new Event("input", { bubbles: true })); b.closest(".chips")?.remove(); }));
   app.querySelectorAll("[data-minutes]").forEach(input => input.addEventListener("input", () => {
     d[input.dataset.minutes] = minuteValue(input.value); remember();
@@ -238,6 +241,7 @@ function renderHome() {
         <div class="side"><span class="lbl">Bil i dag ${Q("bil")}</span><span class="num">${fmtMin(v.car.totalMin)}<small> min</small></span><span class="parts">${v.car.totalMin != null ? `${v.car.freeFlowMin} fri flyt + ${fmtMin(Math.max(0, v.car.delayMin))} kø + ${v.car.parkingWalkMin} parkering` : "mangler grunnlag"}</span></div>
         <div class="side"><span class="lbl">Tog i dag ${Q("tog")}</span><span class="num">${fmtMin(v.train.totalMin)}<small> min</small></span><span class="parts">${fmtMin(v.train.toStationMin)} til stasjon + ${fmtMin(v.train.waitMin)} venting + ${fmtMin(v.train.railMin)} tog + ${fmtMin(v.train.walkMin)} gange</span></div>
       </div>
+      ${v.car?.forecast && v.car.forecast.horizonMin > 15 ? `<p class="small">Ventet kø når du drar kl. ${hhmm(v.car.leaveAt)}: <b>${Math.round(v.car.forecast.delayMin)} min</b> (${Math.round(v.car.forecast.lowMin)}–${Math.round(v.car.forecast.highMin)}). Nå: ${Math.round(v.car.delayNowMin ?? v.car.delayMin)} min. ${Q("avreise")}</p>` : ""}
       ${truthLine(v)}
       <details class="sources"><summary>Grunnlaget for sammenligningen</summary>
         <p>Inntastede tider: ${v.audit?.inputBasis === "user_estimate" ? "dine anslag" : "eldre verdier som må kontrolleres"}.</p>
