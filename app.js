@@ -40,11 +40,11 @@ const HELP = {
   bil: ["Bil i dag", "Kjøretiden uten kø du oppga + modellert køtillegg + parkering og gange til jobb. Dine egne tider er anslag. DATEX beskriver veistrekninger, ikke en observert personlig biltur."],
   tog: ["Tog i dag", "Tiden du bruker til stasjonen, ventetid til neste tog etter at du rekker fram, togets kjøretid med sanntid fra Entur, og gangen fra stasjonen til jobb."],
   sparer: ["Du sparer", "Bil i dag minus tog i dag. Vi sier bare at toget vinner når differansen er minst 10 minutter og togene i ditt tidsvindu ikke har varsler i Avviksvarsel. Hvis køen er i ferd med å løse seg opp krever vi 15."],
-  kø: ["Køen på veien din", "Summen av målt reisetid minus fri flyt på strekningene Statens vegvesen dekker inn mot Oslo, på den veien du faktisk ville kjørt: E18 vest, E6 nord, E6 sør eller Mosseveien. Finnes det en reell omvei, regner vi begge og bruker den raskeste den morgenen. Trenden sier om køen øker, er stabil eller avtar. Strekningen Lier–Holmen mangler måling, så for Lier, Brakerøya og Asker kan vi ikke svare før Vegvesenet skrur den på."],
+  kø: ["Køen på veien din", "Summen av målt reisetid minus fri flyt på strekningene Statens vegvesen dekker inn mot Oslo, på den veien du faktisk ville kjørt: E18 vest, E6 nord, E6 sør eller Mosseveien. Finnes det en reell omvei, regner vi begge og bruker den raskeste den morgenen. Trenden sier om køen øker, er stabil eller avtar. Vest for Holmen måler Vegvesenet ingenting, så for Lier, Brakerøya og Asker ser vi bare de siste 16 kilometerne. Resten regnes som helt uten kø. Det gjør anslaget forsiktig, ikke feil: er det kø der også, sparer toget mer enn vi sier."],
   togstatus: ["Togene i dag", "Avviksvarsel omfatter reisene tjenesten dekker. Tom varslingsliste er ingen garanti for normal trafikk. Journey Planner viser forventede tider, ikke dokumentasjon på faktisk ankomst."],
   tilstand: ["Hva kortet kan si", "«I dag vinner toget» er det eneste varselet vi sender, og bare når køen avgjør. Slår bilen toget, får du ingen melding. Åpner du appen, ser du likevel dagens regnestykke: «ingen togfordel», «toget er raskest uansett» (der toget slår bilen selv uten kø), «togene er usikre» eller «vet ikke». Vi sier aldri «ta bilen»."],
   test: ["Testperiode", "Du er med i en test med kolleger. Varsel kommer bare de morgenene toget vinner; de andre morgenene er det stille. Alt du svarer på kortet brukes til å måle om varselet treffer. Vi lagrer ingen adresse, bare stasjon, arbeidsområde og minuttene du oppgir."],
-  fasit: ["Fasit", "Hvert kort etterkontrolleres automatisk når kjøreturen din er over: vi henter køen Vegvesenet faktisk målte på strekningene dine i det tidsrommet, og regner ut om toget vant. Treff og bom vises i dashbordet, kort for kort. Togtiden er fortsatt sanntidsprognosen fra da kortet gikk, ikke en målt ankomst, og bilturen er et modellanslag fra veidata og tidene du oppga, ikke en observert biltur."],
+  fasit: ["Fasit", "Hvert kort etterkontrolleres automatisk når kjøreturen din er over: vi henter køen Vegvesenet faktisk målte på veien din i det tidsrommet, og regner ut om toget vant. Du får se svaret her, også når det går i vår disfavør — sa vi ingenting og toget vant likevel, står det. Togtiden er fortsatt sanntidsprognosen fra da kortet gikk, ikke en målt ankomst, og bilturen er et modellanslag fra veidata og tidene du oppga, ikke en observert biltur."],
   ferskhet: ["Kilder og ferskhet", "Veidata: Statens vegvesen DATEX II, oppdatert hvert femte minutt. Tog: Entur Avviksvarsel og Journey Planner med sanntid. Kortet lages klokka 06:30 og 07:00 og bruker målingene som var ferske da."],
 };
 
@@ -67,7 +67,8 @@ function clientFacts() {
 function track(kind, meta) { try { fetch(API + "/events", { method: "POST", keepalive: true, headers: { "Content-Type": "application/json", "Bypass-Tunnel-Reminder": "true" }, body: JSON.stringify({ deviceId, kind, meta: meta || {}, client: clientFacts() }) }).catch(() => {}); } catch {} }
 const isStandalone = window.matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
 const hhmm = (iso) => new Intl.DateTimeFormat("nb-NO", { timeZone: "Europe/Oslo", hour: "2-digit", minute: "2-digit" }).format(new Date(iso));
-const fmtMin = n => Number.isFinite(n) ? String(Math.round(n * 10) / 10) : "–";
+// Norwegian writes 14,7 — not 14.7. String() gives the English form, which reads as a typo in a Norwegian app.
+const fmtMin = n => Number.isFinite(n) ? (Math.round(n * 10) / 10).toLocaleString("nb-NO") : "–";
 const dateLabel = (iso) => new Intl.DateTimeFormat("nb-NO", { timeZone: "Europe/Oslo", weekday: "short", day: "numeric", month: "short" }).format(new Date(iso));
 function toast(msg, ms = 2600) { const t = $("#toast"); t.textContent = msg; t.hidden = false; clearTimeout(toast._t); toast._t = setTimeout(() => (t.hidden = true), ms); }
 function help(key) { const [title, body] = HELP[key] || ["", ""]; $("#popover-title").textContent = title; $("#popover-body").innerHTML = `<p>${body}</p>`; $("#popover").hidden = false; $("#popover-close").focus(); }
@@ -150,7 +151,7 @@ function renderOnboarding() {
       <label class="field" for="f-station">Stasjonen du reiser fra
         <select id="f-station" required><option value="">Velg stasjon</option>${["E18 vest", "E18 Mosseveien", "E6 sør", "E6 nord"].filter((c) => Object.values(stations).some((s) => (s.corridor || "") === c)).concat([...new Set(Object.values(stations).map((s) => s.corridor || ""))].filter((c) => !["E18 vest", "E18 Mosseveien", "E6 sør", "E6 nord"].includes(c))).map((c) => `<optgroup label="${c || "Stasjoner"}">${Object.entries(stations).filter(([, s]) => (s.corridor || "") === c).map(([id, station]) => `<option value="${id}" ${id === d.station ? "selected" : ""}>${station.name}</option>`).join("")}</optgroup>`).join("")}</select>
       </label>
-      <p id="station-coverage-note" class="hint" ${st.dark ? "" : "hidden"}>Vegvesenet mangler måling på deler av denne veien. Da svarer vi «vet ikke».</p>
+      <p id="station-coverage-note" class="hint" ${st.dark ? "" : "hidden"}>Vegvesenet måler ikke hele veien herfra. Den delen vi ikke ser regner vi som helt uten kø, så anslaget er forsiktig: er det kø der også, sparer toget mer enn vi sier. Aldri mindre.</p>
       <div class="field"><label>Når drar du vanligvis hjemmefra? ${Q("avreise")}</label><div class="chips" data-chips="leaveAt">${["06:40", "07:00", "07:15", "07:30", "07:45", "08:00", "08:15"].map((t) => `<button type="button" class="chip" data-v="${t}" aria-pressed="${d.leaveAt === t}">${t}</button>`).join("")}<button type="button" class="chip" data-v="" aria-pressed="${!d.leaveAt}">Varierer</button></div></div>
       ${minutes("toStationMin", "Uten venting på toget.")}
       <label class="field" for="f-work">Der du jobber
@@ -260,11 +261,29 @@ async function subscribePush() {
   track("push_enabled"); return sub.toJSON();
 }
 
-function truthMark() {
-  return "fasit ikke verifisert";
+// What actually happened, once the drive window has closed and the road archive has been read. These two were
+// stubs that always said «fasit ikke verifisert», written while the scoring was suspended. Every card is scored
+// automatically now, and the person who got it — or who got nothing — is the one entitled to know.
+const outcomeOf = (v) => {
+  const t = v?.truth;
+  if (!t?.scored) return null;
+  if (v.state === "TOG_VINNER") return t.hit ? "treff" : "bom";
+  return t.missedWin ? "tapt" : "riktig";
+};
+function truthMark(v) {
+  return { treff: "traff", bom: "bommet", tapt: "toget vant likevel", riktig: "riktig stille" }[outcomeOf(v)] || "venter på fasit";
 }
-function truthLine() {
-  return `<p class="small muted">Fasit er ikke verifisert. Togtidene er prognoser; bilalternativet er et modellanslag, ikke en observert personlig biltur. ${Q("fasit")}</p>`;
+function truthLine(v) {
+  const t = v?.truth, o = outcomeOf(v);
+  const saved = t?.actualSavedMin != null ? fmtMin(Math.abs(t.actualSavedMin)) : null;
+  if (o === "treff") return `<p class="small ok">Etterpå: toget var faktisk ${saved} min raskere. Vi traff. ${Q("fasit")}</p>`;
+  if (o === "bom") return `<p class="small warn">Etterpå: bilen var faktisk ${saved} min raskere. Vi bommet, og det telles mot oss. ${Q("fasit")}</p>`;
+  // The case worth being loudest about: no notification went out, and the train won anyway. «Sendte ingen
+  // melding» rather than «sa ingenting», because on a «toget vinner uansett» morning the card was there to
+  // read — what was missing was the nudge.
+  if (o === "tapt") return `<p class="small warn">Etterpå: vi sendte ingen melding i dag, men toget var faktisk ${saved} min raskere. Det er en tapt mulighet, og den telles mot oss. ${Q("fasit")}</p>`;
+  if (o === "riktig") return `<p class="small muted">Etterpå: bilen holdt seg best, akkurat som vi sa. ${Q("fasit")}</p>`;
+  return `<p class="small muted">Fasiten regnes ut når kjøreturen din er over: vi henter køen Vegvesenet faktisk målte på veien din i det tidsrommet. Togtiden er fortsatt sanntidsprognosen fra da kortet gikk, ikke en målt ankomst. ${Q("fasit")}</p>`;
 }
 function renderHome() {
   const p = state.profile;
@@ -292,7 +311,7 @@ function renderHome() {
         ${(v.car?.roadOptions || []).length > 1 ? `<p>Veivalg: ${v.car.roadOptions.map((o) => o.usable ? `<b>${o.road}</b> ${o.delayMin} min kø${o.extraFreeFlowMin ? ` + ${o.extraFreeFlowMin} min lengre vei` : ""}${o.road === v.car.road ? " ← brukt" : ""}` : `${o.road}: ${o.why}`).join("<br>")}<br><span class="muted">Vi regner bilen på den raskeste veien du kan velge i dag, ikke bare den du pleier å ta.</span></p>` : ""}
         <p>Tog: ${v.sources?.journeyPlanner?.ok ? "forventede tider" : "kilde mangler"}. Faktisk togankomst og personlig bilreise er ikke observert.</p>
       </details>
-      ${v.car.delayMin != null ? `<p class="small">E18 mot Oslo: <b>${fmtMin(v.car.delayMin)} min</b> forsinkelse, trend ${{ increasing: "økende", decreasing: "avtagende", stable: "stabil" }[v.car.trend] || v.car.trend}. ${Q("kø")}</p>` : ""}
+      ${v.car.delayMin != null ? `<p class="small">${v.car.road || "Veien"} mot Oslo: <b>${fmtMin(v.car.delayMin)} min</b> forsinkelse, trend ${{ increasing: "økende", decreasing: "avtagende", stable: "stabil" }[v.car.trend] || v.car.trend}. ${Q("kø")}</p>` : ""}
     </section>
     <section class="card">
       <h3>Neste tog ${st.name} → ${area.label?.split(" / ")[0] || "Oslo S"} ${Q("togstatus")}</h3>

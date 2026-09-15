@@ -124,3 +124,8 @@ label.field .hint { font-weight: 400; color: var(--muted); font-size: .85rem; }
 .minute-input .done { display: none; padding: .35rem .7rem; font-size: .85rem; }
 .minute-input:focus-within .done { display: inline-block; }
 .field > label .q, h2 .q { vertical-align: middle; }
+
+/* The outcome of a card after the fact. Green when we were right, amber when we were not — including the case
+   where we said nothing and the train won anyway, which is the failure people never see otherwise. */
+.small.ok { color: #7ddc9a; }
+.small.warn { color: #f0c274; }
