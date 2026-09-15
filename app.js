@@ -289,11 +289,19 @@ function truthLine(v) {
 function renderHome() {
   const p = state.profile;
   const v = state.latest;
+  // Navnene kommer fra oppsettet serveren sender. Har det ikke rukket fram, sto det «undefined → undefined»
+  // rett på skjermen. Ingen navn er bedre enn et ord som avslører at noe mangler.
   const st = v?.station || state.config?.stations?.[p.station] || {};
   const area = v?.work || state.config?.workAreas?.[p.workArea] || {};
+  const stName = st.name || "stasjonen din";
+  const areaName = area.label || "jobben din";
   // Ett sted som gjør en tilstand om til ord. Sto før to steder, og listen i historikken manglet TOG_ALLTID,
   // så den falt gjennom til råverdien og skrev «TOG_ALLTID» rett på skjermen.
-  const title = { TOG_VINNER: `I dag vinner toget fra ${st.name}`, TOG_ALLTID: `Toget er raskest fra ${st.name} uansett`, INGEN_FORDEL: `Ingen togfordel i dag`, TOG_USIKKERT: `Kø på veien, men togene er usikre`, VET_IKKE: `Vet ikke i dag` };
+  const title = { TOG_VINNER: `I dag vinner toget fra ${stName}`, TOG_ALLTID: `Toget er raskest fra ${stName} uansett`, INGEN_FORDEL: `Ingen togfordel i dag`, TOG_USIKKERT: `Kø på veien, men togene er usikre`, VET_IKKE: `Vet ikke i dag` };
+  // «Slå på varsler» er det viktigste en ny bruker kan gjøre. Den lå tre kort ned på siden, og i tilstanden
+  // uten kort forsvant den helt. Samme markup rendres nå rett under kortet, og rett under beskjeden om at
+  // kortet ikke har kommet ennå.
+  const ACTIONS = `<div class="row"><button class="btn" id="btn-now">Sjekk nå</button>${p.pushEnabled ? `<button class="btn btn-secondary" id="btn-test">Send testvarsel</button>` : `<button class="btn btn-secondary" id="btn-push">Slå på varsler</button>`}</div>`;
   app.innerHTML = `
     ${v ? `
     <section class="card verdict ${v.state}" aria-labelledby="vh">
@@ -301,12 +309,17 @@ function renderHome() {
       <h1 id="vh">${v.state === "TOG_VINNER" && v.sources?.datex?.routeVerified !== true ? "Modellen anslår togfordel" : title[v.state] || "Vet ikke i dag"}</h1>
       <p>${v.reason}</p>
       ${v.sources?.datex?.routeVerified !== true ? `<p class="small">Bilanslaget bruker en stasjonskorridor. Din påkjøring og faktiske bilrute er ikke verifisert. Ordinære varsler er sperret inntil ruten er avklart; testvarsel kan fortsatt brukes.</p>` : ""}
-      ${v.savedMin != null && v.state === "TOG_VINNER" ? `<p><b>${v.sources?.datex?.routeVerified === true ? "Du sparer ca." : "Modellen anslår ca."} ${fmtMin(v.savedMin)} min${v.sources?.datex?.routeVerified === true ? "." : " forskjell."}</b> ${Q("sparer")}</p>` : ""}
+      ${v.savedMin != null && v.state === "TOG_VINNER" ? `<p><b>${v.sources?.datex?.routeVerified === true ? "Du sparer ca." : "Modellen anslår ca."} ${Math.round(v.savedMin)} min${v.sources?.datex?.routeVerified === true ? "." : " forskjell."}</b> ${Q("sparer")}</p>` : ""}
       <div class="compare">
-        <div class="side"><span class="lbl">Bil i dag ${Q("bil")}</span><span class="num">${fmtMin(v.car.totalMin)}<small> min</small></span><span class="parts">${v.car.totalMin != null ? `${v.car.freeFlowMin} fri flyt + ${fmtMin(Math.max(0, v.car.delayMin))} kø + ${v.car.parkingWalkMin} parkering` : "mangler grunnlag"}</span></div>
-        <div class="side"><span class="lbl">Tog i dag ${Q("tog")}</span><span class="num">${fmtMin(v.train.totalMin)}<small> min</small></span><span class="parts">${fmtMin(v.train.toStationMin)} til stasjon + ${fmtMin(v.train.waitMin)} venting + ${fmtMin(v.train.railMin)} tog + ${fmtMin(v.train.walkMin)} gange</span></div>
+        <div class="side"><span class="lbl">Bil i dag ${Q("bil")}</span><span class="num">${Math.round(v.car.totalMin)}<small> min</small></span><span class="parts">${v.car.totalMin != null ? `${v.car.freeFlowMin} fri flyt + ${fmtMin(Math.max(0, v.car.delayMin))} kø + ${v.car.parkingWalkMin} parkering` : "mangler grunnlag"}</span></div>
+        <div class="side"><span class="lbl">Tog i dag ${Q("tog")}</span><span class="num">${Math.round(v.train.totalMin)}<small> min</small></span><span class="parts">${fmtMin(v.train.toStationMin)} til stasjon + ${fmtMin(v.train.waitMin)} venting + ${fmtMin(v.train.railMin)} tog + ${fmtMin(v.train.walkMin)} gange</span></div>
       </div>
-      ${v.car?.forecast && v.car.forecast.horizonMin > 15 ? `<p class="small">Ventet kø når du drar kl. ${hhmm(v.car.leaveAt)}: <b>${Math.round(v.car.forecast.delayMin)} min</b> (${Math.round(v.car.forecast.lowMin)}–${Math.round(v.car.forecast.highMin)}). Nå: ${Math.round(v.car.delayNowMin ?? v.car.delayMin)} min. ${Q("avreise")}</p>` : ""}
+      ${v.car?.forecast && v.car.forecast.horizonMin > 15 ? (() => {
+        const venter = Math.round(v.car.forecast.delayMin), na = Math.round(v.car.delayNowMin ?? v.car.delayMin);
+        // Sto før som «17 min (9–29). Nå: 17 min» — samme tall to ganger, og et intervall uten forklaring.
+        const endring = venter > na ? `mer enn nå` : venter < na ? `mindre enn nå` : `som nå`;
+        return `<p class="small">Når du drar kl. ${hhmm(v.car.leaveAt)} venter vi <b>${venter} min kø</b>, ${endring}. ${Q("avreise")}</p>`;
+      })() : ""}
       ${truthLine(v)}
       <details class="sources"><summary>Grunnlaget for sammenligningen</summary>
         <p>Inntastede tider: ${v.audit?.inputBasis === "user_estimate" ? "dine anslag" : "eldre verdier som må kontrolleres"}.</p>
@@ -317,10 +330,11 @@ function renderHome() {
       ${v.car.delayMin != null ? `<p class="small">${v.car.road || "Veien"} mot Oslo: <b>${fmtMin(v.car.delayMin)} min</b> forsinkelse, trend ${{ increasing: "økende", decreasing: "avtagende", stable: "stabil" }[v.car.trend] || v.car.trend}. ${Q("kø")}</p>` : ""}
     </section>
     <section class="card">
-      <h3>Neste tog ${st.name} → ${area.label?.split(" / ")[0] || "Oslo S"} ${Q("togstatus")}</h3>
+      <h3>Neste tog ${stName} → ${area.label?.split(" / ")[0] || "Oslo S"} ${Q("togstatus")}</h3>
       <div class="trains">${v.train.next.length ? v.train.next.map((t) => `<div class="train"><span class="time">${hhmm(t.departs)}</span><span class="line">${t.line} · ${fmtMin(t.minutes)} min · fremme ${hhmm(t.arrives)}</span><span class="rt">${t.realtime ? "sanntid" : "rutetid"}</span></div>`).join("") : `<p class="muted small">Fant ingen direkte tog akkurat nå.</p>`}</div>
       ${v.train.alerts?.length ? `<p class="small"><b>Avviksvarsel:</b> ${v.train.alerts.map((a) => a.title).join("; ")}</p>` : `<p class="small muted">${v.sources?.railAlerts?.ok ? "Ingen sterke avviksvarsler blant reisene tjenesten dekker. Dette er ikke en garanti for at togene går normalt." : "Avviksvarsel kunne ikke bekreftes nå."}</p>`}
     </section>
+    ${ACTIONS}
     <section class="card feedback">
       <h3>Stemte det?</h3>
       <div class="row"><button class="btn btn-secondary" data-fb="useful">👍 Nyttig</button><button class="btn btn-secondary" data-fb="not_useful">👎 Ikke nyttig</button></div>
@@ -332,16 +346,16 @@ function renderHome() {
       <div class="row"><button class="btn btn-secondary" id="fb-send" style="width:auto">Send</button></div>
       <p class="small muted" id="fb-said" hidden></p>
     </section>` : `
-    <section class="card verdict VET_IKKE"><div class="eyebrow">Ikke noe kort ennå</div><h1>Reisen din er lagret</h1><p>Første regnestykke kommer 06:30 neste hverdag. Du får varsel bare hvis toget vinner. «Sjekk nå» viser tallene akkurat nå.</p></section>`}
+    <section class="card verdict VET_IKKE"><div class="eyebrow">Ikke noe kort ennå</div><h1>Reisen din er lagret</h1><p>Første regnestykke kommer 06:30 neste hverdag. Du får varsel bare hvis toget vinner. «Sjekk nå» viser tallene akkurat nå.</p></section>
+    ${ACTIONS}`}
     ${p.leaveAt === undefined || (p.leaveAt == null && !store.get("leaveAtDismissed")) ? `<section class="card ios-hint"><b>Nytt: si når du drar.</b> Da blir kortet en prognose for din avreise, ikke bare køen akkurat nå. <div class="row" style="margin-top:.5rem"><button class="btn btn-secondary" id="leave-edit" style="width:auto">Legg inn avreisetid</button><button class="btn btn-ghost" id="leave-dismiss" style="width:auto">Varierer</button></div></section>` : ""}
     <section class="card wish"><h3>Mangler din strekning?</h3><p class="small muted">Si hvor du reiser fra og til, så prioriterer vi etter ønskene.</p>
       <div class="minute-input"><input id="wish-text" type="text" maxlength="200" placeholder="F.eks. Ski → Oslo S" enterkeyhint="send" style="max-width:none;flex:1"><button class="btn btn-secondary" id="wish-send" style="width:auto">Send</button></div></section>
-    <div class="row"><button class="btn" id="btn-now">Sjekk nå</button>${p.pushEnabled ? `<button class="btn btn-secondary" id="btn-test">Send testvarsel</button>` : `<button class="btn btn-secondary" id="btn-push">Slå på varsler</button>`}</div>
     ${state.verdicts.length > 1 ? `<section class="card"><h3>Tidligere kort</h3><p class="small muted">Hva vi sa, og om det stemte.</p><div class="history">${state.verdicts.slice(1, 12).map((h) => `<div class="hist"><span class="dot ${h.state}"></span><span class="hist-when">${dateLabel(h.issuedAt)} ${h.slot === "now" ? hhmm(h.issuedAt) : h.slot}</span><span class="hist-said">${SAID[h.state] || "Vet ikke"}</span><span class="hist-out ${outcomeOf(h) || "venter"}">${truthMark(h)}</span></div>`).join("")}</div></section>` : ""}
     <section class="sources">
       <span><b>Kilder</b> ${Q("ferskhet")}</span>
       <span>Vei: Statens vegvesen DATEX II${v?.sources?.datex?.ageMin != null ? `, ${fmtMin(v.sources.datex.ageMin)} min gamle tall` : ""}. Tog: Entur Avviksvarsel og Journey Planner.</span>
-      <span>${v ? "Reisen i dette kortet" : "Din reise"}: ${st.name} → ${area.label}. ${carBaselineSummary(v ? {carFreeFlowMin:v.car.freeFlowMin,parkingWalkMin:v.car.parkingWalkMin} : p)}</span>
+      <span>${v ? "Reisen i dette kortet" : "Din reise"}: ${stName} → ${areaName}. ${carBaselineSummary(v ? {carFreeFlowMin:v.car.freeFlowMin,parkingWalkMin:v.car.parkingWalkMin} : p)}</span>
     </section>`;
   $("#btn-now").addEventListener("click", () => { track("check_now"); checkNow(); });
   $("#leave-edit")?.addEventListener("click", () => { state.draft = { ...p }; state.profile = null; state.step = 1; render(); });

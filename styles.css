@@ -131,18 +131,20 @@ label.field .hint { font-weight: 400; color: var(--muted); font-size: .85rem; }
 .small.warn { color: var(--warn-ink); }
 
 /* Tidligere kort: når, hva vi sa, og om det stemte. Tre kolonner som ikke konkurrerer om oppmerksomheten. */
-.hist { grid-template-columns: auto auto 1fr auto; }
-.hist-when { color: var(--muted); white-space: nowrap; }
-.hist-said { min-width: 0; overflow-wrap: anywhere; }
-.hist-out { white-space: nowrap; font-size: .85em; }
+/* To rader som standard, ikke fire kolonner. Fire kolonner på en 390 px skjerm klemmer midtfeltet så
+   «Ingen togfordel» brekker i to linjer ved siden av et tomt felt. Tid over, dom under. */
+.hist { grid-template-columns: auto 1fr; row-gap: .15rem; }
+.hist-when { color: var(--muted); white-space: nowrap; font-size: .85em; }
+.hist-said { grid-column: 2; min-width: 0; overflow-wrap: anywhere; }
+.hist-out { grid-column: 2; white-space: nowrap; font-size: .85em; }
 .hist-out.treff, .hist-out.riktig { color: var(--win-ink); }
 .hist-out.bom, .hist-out.tapt { color: var(--warn-ink); }
 .hist-out.venter { color: var(--muted); }
-@media (max-width: 380px) {
-  .hist { grid-template-columns: auto 1fr; row-gap: .25rem; }
-  .hist-when { grid-column: 2; }
-  .hist-said { grid-column: 2; }
-  .hist-out { grid-column: 2; }
+/* Har raden plass, står alt på én linje. Grensen er satt der teksten faktisk begynner å brekke, ikke på et
+   rundt tall: «Ingen togfordel» og «vi burde varslet» trenger omtrent 430 px sammen med prikk og dato. */
+@media (min-width: 430px) {
+  .hist { grid-template-columns: auto auto 1fr auto; row-gap: 0; }
+  .hist-said, .hist-out { grid-column: auto; }
 }
 
 /* Fritekst i tilbakemeldingen. En tommel sier om vi var nyttige; bare ord sier hvorfor. */
