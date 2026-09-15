@@ -326,6 +326,11 @@ function renderHome() {
       <div class="row"><button class="btn btn-secondary" data-fb="useful">👍 Nyttig</button><button class="btn btn-secondary" data-fb="not_useful">👎 Ikke nyttig</button></div>
       <p class="small muted">Hva gjorde du i dag?</p>
       <div class="row"><button class="btn btn-secondary" data-fb="took_train">Tok toget</button><button class="btn btn-secondary" data-fb="took_car">Tok bilen</button><button class="btn btn-secondary" data-fb="wfh">Hjemme</button></div>
+      <label class="field" for="fb-text">Si det med egne ord
+        <textarea id="fb-text" rows="3" maxlength="500" placeholder="Hva stemte eller stemte ikke? Hva manglet?"></textarea>
+      </label>
+      <div class="row"><button class="btn btn-secondary" id="fb-send" style="width:auto">Send</button></div>
+      <p class="small muted" id="fb-said" hidden></p>
     </section>` : `
     <section class="card verdict VET_IKKE"><div class="eyebrow">Ikke noe kort ennå</div><h1>Reisen din er lagret</h1><p>Første regnestykke kommer 06:30 neste hverdag. Du får varsel bare hvis toget vinner. «Sjekk nå» viser tallene akkurat nå.</p></section>`}
     ${p.leaveAt === undefined || (p.leaveAt == null && !store.get("leaveAtDismissed")) ? `<section class="card ios-hint"><b>Nytt: si når du drar.</b> Da blir kortet en prognose for din avreise, ikke bare køen akkurat nå. <div class="row" style="margin-top:.5rem"><button class="btn btn-secondary" id="leave-edit" style="width:auto">Legg inn avreisetid</button><button class="btn btn-ghost" id="leave-dismiss" style="width:auto">Varierer</button></div></section>` : ""}
@@ -345,7 +350,21 @@ function renderHome() {
   $("#wish-text")?.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); $("#wish-send").click(); } });
   $("#btn-test")?.addEventListener("click", async () => { try { await api(`/subscriptions/${deviceId}/test`, { method: "POST" }); toast("Testvarsel sendt. Sjekk varslingssenteret."); } catch (e) { toast("Klarte ikke sende: " + e.message); } });
   $("#btn-push")?.addEventListener("click", async () => { try { const push = await subscribePush(); if (!push) return; await answers.submit("/subscriptions", { deviceId, profile: state.profile, push, slots: state.profile.slots, days: state.profile.days, client: clientFacts() }); state.profile.pushEnabled = true; store.set("profile", state.profile); toast("Varsler er på."); render(); } catch (e) { toast("Feil: " + e.message); } });
-  app.querySelectorAll("[data-fb]").forEach((b) => b.addEventListener("click", async () => { try { b.disabled=true; await answers.submit("/feedback", { deviceId, verdictId: v?.id || null, kind: b.dataset.fb }); b.textContent = "Lagret hos tjenesten"; b.disabled = true; } catch (e) { b.disabled=false; toast("Ikke bekreftet lagret. Svaret beholdes i sendekøen hvis nettleserlagringen virker.",6000); } }));
+  // Svaret skal synes med en gang. Knappen sa før «Lagret hos tjenesten», som er vårt språk, ikke leserens.
+  const fbSaid = (msg) => { const el = $("#fb-said"); if (!el) return; el.textContent = msg; el.hidden = false; };
+  app.querySelectorAll("[data-fb]").forEach((b) => b.addEventListener("click", async () => {
+    const label = b.textContent;
+    try { b.disabled = true; await answers.submit("/feedback", { deviceId, verdictId: v?.id || null, kind: b.dataset.fb }); b.textContent = "✓ " + label; fbSaid("Takk. Svaret er notert."); }
+    catch (e) { b.disabled = false; toast("Fikk ikke sendt. Svaret ligger i køen og sendes når du er på nett.", 6000); }
+  }));
+  $("#fb-send")?.addEventListener("click", async () => {
+    const box = $("#fb-text"), text = (box?.value || "").trim();
+    if (text.length < 2) { box?.focus(); return fbSaid("Skriv noen ord først."); }
+    const btn = $("#fb-send");
+    try { btn.disabled = true; await answers.submit("/feedback", { deviceId, verdictId: v?.id || null, kind: "comment", text }); box.value = ""; fbSaid("Takk. Det du skrev er sendt, og vi leser alt."); }
+    catch (e) { fbSaid("Fikk ikke sendt. Det du skrev ligger i køen og sendes når du er på nett."); }
+    finally { btn.disabled = false; }
+  });
 }
 
 async function checkNow() {
