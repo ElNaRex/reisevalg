@@ -1,1 +1,59 @@
-<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="0; url=./"><title>Reisevalg</title><p>Sender deg til appen …</p>
+<!doctype html>
+<html lang="nb">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Reisevalg har flyttet</title>
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#181C56">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700&display=swap">
+<style>
+  :root { color-scheme: light dark; --bg: #ffffff; --fg: #181C56; --dim: #55597e; --line: #e3e4ef; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #12142c; --fg: #f2f3fa; --dim: #a9adc9; --line: #2a2d4d; } }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 400 17px/1.55 "Plus Jakarta Sans", system-ui, sans-serif;
+         min-height: 100dvh; display: grid; place-items: center; padding: 24px 16px; }
+  main { max-width: 34rem; }
+  h1 { font-size: 1.6rem; font-weight: 700; margin: 0 0 .75rem; letter-spacing: -.01em; }
+  p { margin: 0 0 1rem; color: var(--dim); }
+  a.gaa { display: inline-block; background: var(--fg); color: var(--bg); text-decoration: none;
+          font-weight: 600; padding: .8rem 1.3rem; border-radius: 999px; }
+  ul { color: var(--dim); padding-left: 1.2rem; margin: 0 0 1.5rem; }
+  li { margin-bottom: .4rem; }
+  footer { margin-top: 2rem; padding-top: 1rem; border-top: 1px solid var(--line); font-size: .9rem; color: var(--dim); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Reisevalg har flyttet</h1>
+  <p>Appen kjører nå på Enturs egen infrastruktur. Denne siden lå på en privat GitHub-konto og er lagt ned.</p>
+  <p><a class="gaa" id="gaa" href="https://reisevalg-nwffgkkf7q-ew.a.run.app/">Åpne Reisevalg</a></p>
+  <ul>
+    <li>Har du appen på Hjem-skjermen: slett den og installer den på nytt fra den nye adressen.</li>
+    <li>Varsler må godkjennes på nytt. Abonnementet ditt hang i den gamle adressen og følger ikke med.</li>
+  </ul>
+  <footer>Eksperiment fra Team KI-eksperimentering i Entur.</footer>
+</main>
+<script>
+// Rydd opp etter den gamle installasjonen foer vi sender folk videre: uten dette serverer den gamle
+// service workeren sitt bufrede skall, og redirecten blir aldri sett paa en enhet som alt har appen.
+(async () => {
+  const NY = "https://reisevalg-nwffgkkf7q-ew.a.run.app/";
+  try {
+    if ("serviceWorker" in navigator) {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(regs.map((r) => r.unregister()));
+    }
+    if (window.caches) {
+      const keys = await caches.keys();
+      await Promise.all(keys.map((k) => caches.delete(k)));
+    }
+  } catch {}
+  // Staar appen som egen installasjon, lar vi brukeren trykke selv. Et automatisk hopp der havner i
+  // det gamle PWA-skallet med gammelt scope, og da ser det ut som om ingenting skjedde.
+  const standalone = window.matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+  if (!standalone) setTimeout(() => location.replace(NY), 2500);
+})();
+</script>
+</body>
+</html>
